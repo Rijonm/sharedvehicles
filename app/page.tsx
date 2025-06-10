@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react" // MapPin might be unused now
+import { Loader2, AlertCircle, RefreshCw } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -32,11 +32,12 @@ const defaultLocations = [
   { name: "Lausanne", coords: [46.5197, 6.6323] },
 ]
 
-const FIXED_SEARCH_RADIUS = 400
-const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
+const FIXED_SEARCH_RADIUS = 400 // Search radius set to 400m
+const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275] // Approx. center of Switzerland
 const DEFAULT_MAP_ZOOM_OVERVIEW = 8
-const ACTIVE_SEARCH_INITIAL_ZOOM = 16
+const ACTIVE_SEARCH_INITIAL_ZOOM = 16 // Zoom level for active search (400m radius)
 
+// Updated vehicle type filters based on user input
 const VEHICLE_TYPE_API_FILTERS = [
   "ch.bfe.sharedmobility.vehicle_type=E-Scooter",
   "ch.bfe.sharedmobility.vehicle_type=E-Bike",
@@ -50,7 +51,6 @@ export default function Home() {
   const [location, setLocation] = useState<[number, number] | null>(null)
   const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null)
   const [locationName, setLocationName] = useState<string>("")
-  // showLocationAlert state removed
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
@@ -65,7 +65,6 @@ export default function Home() {
           setLocation(currentCoords)
           setUserLocationMarker(currentCoords)
           setLocationName("Ihr Standort")
-          // setShowLocationAlert(false) removed
           toast({
             title: "Standort aktualisiert",
             description: `Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m) werden gesucht.`,
@@ -76,7 +75,6 @@ export default function Home() {
           setUserLocationMarker(null)
           setLocation(null)
           setLocationName("")
-          // setShowLocationAlert(true) removed
           console.log(`Geolocation error (${error.code}): ${error.message}`)
           let description = "Ihr Standort konnte nicht ermittelt werden."
           if (error.code === 1) {
@@ -95,7 +93,6 @@ export default function Home() {
       setUserLocationMarker(null)
       setLocation(null)
       setLocationName("")
-      // setShowLocationAlert(true) removed
       toast({
         title: "Standort nicht verfügbar",
         description:
@@ -116,6 +113,7 @@ export default function Home() {
     params.append("Geometry", `${currentLocation[1]},${currentLocation[0]}`)
     params.append("Tolerance", radius)
     params.append("filters", filterValue)
+    // offset=0 is default, limit=50 is default by API
 
     try {
       const response = await fetch(`/api/mobility?${params.toString()}`)
@@ -206,7 +204,6 @@ export default function Home() {
     setLocation(newLocation)
     setLocationName(name)
     setUserLocationMarker(null)
-    // setShowLocationAlert(false) removed
   }
 
   const handleDefaultLocationSelect = (locationData: { name: string; coords: [number, number] }) => {
@@ -214,7 +211,6 @@ export default function Home() {
     setLocation(locationData.coords)
     setLocationName(locationData.name)
     setUserLocationMarker(null)
-    // setShowLocationAlert(false) removed
   }
 
   const refreshData = () => {
@@ -235,7 +231,6 @@ export default function Home() {
     setLocation(null)
     setLocationName("Demo Daten")
     setUserLocationMarker(null)
-    // setShowLocationAlert(false) removed
     import("@/mock/mobility-data").then((module) => {
       const allMockVehicles = module.default
       const uniqueVehiclesMap = new Map<string, MobilityVehicle>()
@@ -248,7 +243,7 @@ export default function Home() {
       setLastUpdated(new Date())
       toast({
         title: "Demo-Daten werden verwendet",
-        description: "Umgeschaltet auf Demo-Modus mit Beispielfahrzeugen aller Typen.",
+        description: "Umgewechselt auf Demo-Modus mit Beispielfahrzeugen aller Typen.",
       })
       setLoading(false)
     })
@@ -268,8 +263,6 @@ export default function Home() {
         {lastUpdated && locationName && (
           <p className="text-sm text-muted-foreground mb-4">Zuletzt aktualisiert: {lastUpdated.toLocaleTimeString()}</p>
         )}
-
-        {/* Removed the showLocationAlert block */}
 
         {apiError && (
           <Alert className="mb-6" variant="destructive">
