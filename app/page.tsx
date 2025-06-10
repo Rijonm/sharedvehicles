@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
-import { Loader2, MapPin, AlertCircle, RefreshCw } from "lucide-react"
+import { Loader2, AlertCircle, RefreshCw } from "lucide-react" // MapPin might be unused now
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -32,12 +32,11 @@ const defaultLocations = [
   { name: "Lausanne", coords: [46.5197, 6.6323] },
 ]
 
-const FIXED_SEARCH_RADIUS = 400 // Search radius set to 400m
-const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275] // Approx. center of Switzerland
+const FIXED_SEARCH_RADIUS = 400
+const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
 const DEFAULT_MAP_ZOOM_OVERVIEW = 8
-const ACTIVE_SEARCH_INITIAL_ZOOM = 16 // Zoom level for active search (400m radius)
+const ACTIVE_SEARCH_INITIAL_ZOOM = 16
 
-// Updated vehicle type filters based on user input
 const VEHICLE_TYPE_API_FILTERS = [
   "ch.bfe.sharedmobility.vehicle_type=E-Scooter",
   "ch.bfe.sharedmobility.vehicle_type=E-Bike",
@@ -51,7 +50,7 @@ export default function Home() {
   const [location, setLocation] = useState<[number, number] | null>(null)
   const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null)
   const [locationName, setLocationName] = useState<string>("")
-  const [showLocationAlert, setShowLocationAlert] = useState(true)
+  // showLocationAlert state removed
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
@@ -66,7 +65,7 @@ export default function Home() {
           setLocation(currentCoords)
           setUserLocationMarker(currentCoords)
           setLocationName("Ihr Standort")
-          setShowLocationAlert(false)
+          // setShowLocationAlert(false) removed
           toast({
             title: "Standort aktualisiert",
             description: `Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m) werden gesucht.`,
@@ -77,7 +76,7 @@ export default function Home() {
           setUserLocationMarker(null)
           setLocation(null)
           setLocationName("")
-          setShowLocationAlert(true)
+          // setShowLocationAlert(true) removed
           console.log(`Geolocation error (${error.code}): ${error.message}`)
           let description = "Ihr Standort konnte nicht ermittelt werden."
           if (error.code === 1) {
@@ -96,7 +95,7 @@ export default function Home() {
       setUserLocationMarker(null)
       setLocation(null)
       setLocationName("")
-      setShowLocationAlert(true)
+      // setShowLocationAlert(true) removed
       toast({
         title: "Standort nicht verfügbar",
         description:
@@ -117,7 +116,6 @@ export default function Home() {
     params.append("Geometry", `${currentLocation[1]},${currentLocation[0]}`)
     params.append("Tolerance", radius)
     params.append("filters", filterValue)
-    // offset=0 is default, limit=50 is default by API
 
     try {
       const response = await fetch(`/api/mobility?${params.toString()}`)
@@ -208,7 +206,7 @@ export default function Home() {
     setLocation(newLocation)
     setLocationName(name)
     setUserLocationMarker(null)
-    setShowLocationAlert(false)
+    // setShowLocationAlert(false) removed
   }
 
   const handleDefaultLocationSelect = (locationData: { name: string; coords: [number, number] }) => {
@@ -216,7 +214,7 @@ export default function Home() {
     setLocation(locationData.coords)
     setLocationName(locationData.name)
     setUserLocationMarker(null)
-    setShowLocationAlert(false)
+    // setShowLocationAlert(false) removed
   }
 
   const refreshData = () => {
@@ -237,7 +235,7 @@ export default function Home() {
     setLocation(null)
     setLocationName("Demo Daten")
     setUserLocationMarker(null)
-    setShowLocationAlert(false)
+    // setShowLocationAlert(false) removed
     import("@/mock/mobility-data").then((module) => {
       const allMockVehicles = module.default
       const uniqueVehiclesMap = new Map<string, MobilityVehicle>()
@@ -271,23 +269,7 @@ export default function Home() {
           <p className="text-sm text-muted-foreground mb-4">Zuletzt aktualisiert: {lastUpdated.toLocaleTimeString()}</p>
         )}
 
-        {showLocationAlert && (
-          <Alert className="mb-6" variant="default">
-            <MapPin className="h-4 w-4" />
-            <AlertTitle>Standort auswählen</AlertTitle>
-            <AlertDescription>
-              Wählen Sie eine Stadt, suchen Sie einen Ort oder verwenden Sie Ihren aktuellen Standort, um Fahrzeuge in
-              der Nähe zu finden.
-            </AlertDescription>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-4">
-              {defaultLocations.map((loc) => (
-                <Button key={loc.name} variant="outline" size="sm" onClick={() => handleDefaultLocationSelect(loc)}>
-                  {loc.name}
-                </Button>
-              ))}
-            </div>
-          </Alert>
-        )}
+        {/* Removed the showLocationAlert block */}
 
         {apiError && (
           <Alert className="mb-6" variant="destructive">
