@@ -8,7 +8,6 @@ import { Loader2, MapPin, AlertCircle, RefreshCw, Info } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 
 import dynamic from "next/dynamic"
@@ -34,18 +33,19 @@ const defaultLocations = [
 ]
 
 const MAX_VEHICLES_DISPLAY = 500
-const DEFAULT_SEARCH_RADIUS = 500 // Default tolerance set to 500 meters
+const FIXED_SEARCH_RADIUS = 500 // Fixed 500m radius
+const FIXED_VEHICLE_TYPE_FILTER = "ch.bfe.sharedmobility.vehicle_type=E-Scooter" // Fixed to E-Scooter
+const INITIAL_MAP_ZOOM = 16 // Initial zoom level for the map, suitable for 500m radius
 
 export default function Home() {
   const [vehicles, setVehicles] = useState<MobilityVehicle[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedVehicle, setSelectedVehicle] = useState<MobilityVehicle | null>(null)
   const [location, setLocation] = useState<[number, number]>(defaultLocations[0].coords)
-  const [filters, setFilters] = useState<string[]>(["ch.bfe.sharedmobility.vehicle_type=E-Scooter"]) // Default to E-Scooter
+  const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null)
   const [locationName, setLocationName] = useState<string>(defaultLocations[0].name)
   const [showLocationAlert, setShowLocationAlert] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
-  const [searchRadius, setSearchRadius] = useState<number>(DEFAULT_SEARCH_RADIUS) // Use the new default
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [vehicleLimitReached, setVehicleLimitReached] = useState<boolean>(false)
 
@@ -56,19 +56,19 @@ export default function Home() {
       setLoading(true)
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setLocation([position.coords.latitude, position.coords.longitude])
+          const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
+          setLocation(currentCoords)
+          setUserLocationMarker(currentCoords)
           setLocationName("Ihr Standort")
           setShowLocationAlert(false)
-          // Set default filters when using current location, including E-Scooter
-          setFilters(["ch.bfe.sharedmobility.vehicle_type=E-Scooter"])
-          setSearchRadius(DEFAULT_SEARCH_RADIUS) // Reset radius to default when finding current location
           toast({
             title: "Standort aktualisiert",
-            description: "E-Scooter in Ihrer Nähe werden gesucht.",
+            description: `E-Scooter in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m) werden gesucht.`,
           })
         },
         (error) => {
           setLoading(false)
+          setUserLocationMarker(null)
           console.log(`Geolocation error (${error.code}): ${error.message}`)
           let description = "Ihr Standort konnte nicht ermittelt werden."
           if (error.code === 1) {
@@ -80,9 +80,10 @@ export default function Home() {
             variant: "destructive",
           })
         },
-        { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 }, // Increased timeout
+        { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 },
       )
     } else {
+      setUserLocationMarker(null)
       toast({
         title: "Standort nicht verfügbar",
         description:
@@ -106,15 +107,8 @@ export default function Home() {
     try {
       const params = new URLSearchParams()
       params.append("Geometry", `${location[1]},${location[0]}`)
-      params.append("Tolerance", searchRadius.toString())
-
-      // Ensure E-Scooter filter is always present if no other vehicle type is selected
-      const activeFilters = [...filters]
-      const hasVehicleTypeFilter = filters.some((f) => f.startsWith("ch.bfe.sharedmobility.vehicle_type="))
-      if (!hasVehicleTypeFilter) {
-        activeFilters.push("ch.bfe.sharedmobility.vehicle_type=E-Scooter")
-      }
-      activeFilters.forEach((filter) => params.append("filters", filter))
+      params.append("Tolerance", FIXED_SEARCH_RADIUS.toString())
+      params.append("filters", FIXED_VEHICLE_TYPE_FILTER)
 
       const response = await fetch(`/api/mobility?${params.toString()}`)
 
@@ -151,29 +145,30 @@ export default function Home() {
 
         if (convertedVehicles.length === 0) {
           toast({
-            title: "Keine Fahrzeuge gefunden",
-            description: "Versuchen Sie, den Suchradius oder die Filter anzupassen",
+            title: "Keine E-Scooter gefunden",
+            description: `Im Umkreis von ${FIXED_SEARCH_RADIUS}m wurden keine E-Scooter gefunden.`,
           })
         } else {
           toast({
-            title: "Fahrzeuge geladen",
-            description: `${convertedVehicles.length} Fahrzeuge innerhalb von ${(searchRadius / 1000).toFixed(1)}km gefunden`,
+            title: "E-Scooter geladen",
+            description: `${convertedVehicles.length} E-Scooter innerhalb von ${FIXED_SEARCH_RADIUS}m gefunden`,
           })
         }
       } else {
         setVehicles([])
         toast({
-          title: "Keine Fahrzeuge gefunden",
+          title: "Keine E-Scooter gefunden",
           description: "Unerwartetes Datenformat von der API erhalten.",
         })
       }
     } catch (error) {
       console.error("Error fetching spatial vehicles:", error)
-      setApiError(error.message)
+      const message = error instanceof Error ? error.message : "Ein unbekannter Fehler ist aufgetreten."
+      setApiError(message)
       setVehicles([])
       toast({
         title: "Fehler beim Laden der Fahrzeuge",
-        description: error.message || "Bitte versuchen Sie es später erneut",
+        description: message,
         variant: "destructive",
       })
     } finally {
@@ -188,7 +183,7 @@ export default function Home() {
     return () => {
       controller.abort()
     }
-  }, [location, filters, searchRadius])
+  }, [location])
 
   function getDistanceFromLatLonInM(lat1: number, lon1: number, lat2: number, lon2: number) {
     const R = 6371
@@ -206,10 +201,6 @@ export default function Home() {
     return deg * (Math.PI / 180)
   }
 
-  const handleFilterChange = (newFilters: string[]) => {
-    setFilters(newFilters)
-  }
-
   const handleVehicleSelect = (vehicle: MobilityVehicle) => {
     setSelectedVehicle(vehicle)
   }
@@ -217,17 +208,15 @@ export default function Home() {
   const handleLocationSearch = (newLocation: [number, number], name: string) => {
     setLocation(newLocation)
     setLocationName(name)
+    setUserLocationMarker(null)
     setShowLocationAlert(false)
   }
 
   const handleDefaultLocationSelect = (locationData: { name: string; coords: [number, number] }) => {
     setLocation(locationData.coords)
     setLocationName(locationData.name)
+    setUserLocationMarker(null)
     setShowLocationAlert(false)
-  }
-
-  const handleRadiusChange = (value: number[]) => {
-    setSearchRadius(value[0])
   }
 
   const refreshData = () => {
@@ -238,11 +227,11 @@ export default function Home() {
     setApiError(null)
     setVehicleLimitReached(false)
     import("@/mock/mobility-data").then((module) => {
-      setVehicles(module.default)
+      setVehicles(module.default.filter((v) => v.properties.vehicle_type.toLowerCase().includes("scooter")))
       setLastUpdated(new Date())
       toast({
         title: "Demo-Daten werden verwendet",
-        description: "Umgeschaltet auf Demo-Modus mit Beispieldaten",
+        description: "Umgeschaltet auf Demo-Modus mit Beispiel E-Scootern",
       })
     })
   }
@@ -267,7 +256,7 @@ export default function Home() {
             <MapPin className="h-4 w-4" />
             <AlertTitle>Standort auswählen</AlertTitle>
             <AlertDescription>
-              Wählen Sie eine Stadt oder suchen Sie nach einem bestimmten Ort, um Fahrzeuge in der Nähe zu finden. Ihr
+              Wählen Sie eine Stadt oder suchen Sie nach einem bestimmten Ort, um E-Scooter in der Nähe zu finden. Ihr
               aktueller Standort konnte nicht ermittelt werden oder Sie haben die Berechtigung verweigert.
             </AlertDescription>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-4">
@@ -300,9 +289,8 @@ export default function Home() {
             <Info className="h-4 w-4" />
             <AlertTitle>Anzeigelimit erreicht</AlertTitle>
             <AlertDescription>
-              Es wurden mehr als {MAX_VEHICLES_DISPLAY} Fahrzeuge im aktuellen Suchbereich gefunden. Nur die nächsten{" "}
-              {MAX_VEHICLES_DISPLAY} werden angezeigt. Verwenden Sie Filter oder verkleinern Sie den Suchradius, um
-              genauere Ergebnisse zu erhalten.
+              Es wurden mehr als {MAX_VEHICLES_DISPLAY} E-Scooter im aktuellen Suchbereich gefunden. Nur die nächsten{" "}
+              {MAX_VEHICLES_DISPLAY} werden angezeigt.
             </AlertDescription>
           </Alert>
         )}
@@ -310,67 +298,35 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="md:col-span-1">
             <MobilityFilters
-              onFilterChange={handleFilterChange}
               onLocationSearch={handleLocationSearch}
               onSetCurrentLocation={handleSetCurrentLocation}
               defaultLocations={defaultLocations}
-              initialVehicleTypes={["E-Scooter"]} // Pass initial vehicle type
             />
-
-            <div className="mt-6 space-y-4">
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold">Suchradius</h2>
-                <div className="flex items-center space-x-2">
-                  <Slider
-                    defaultValue={[DEFAULT_SEARCH_RADIUS]} // Use default radius for slider
-                    max={10000} // Max radius 10km, can be adjusted
-                    min={100} // Min radius 100m
-                    step={100} // Step 100m
-                    onValueChange={handleRadiusChange}
-                    value={[searchRadius]}
-                  />
-                  <span className="min-w-[4rem] text-right">
-                    {searchRadius >= 1000 ? `${(searchRadius / 1000).toFixed(1)} km` : `${searchRadius} m`}
-                  </span>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    setSearchRadius(DEFAULT_SEARCH_RADIUS) // Reset to 500m
-                    setFilters(["ch.bfe.sharedmobility.vehicle_type=E-Scooter"]) // Reset filters, ensure E-Scooter is default
-                  }}
-                  variant="outline"
-                >
-                  Filter & Radius zurücksetzen
-                </Button>
-              </div>
-            </div>
           </div>
 
           <div className="md:col-span-3">
             <div className="rounded-lg overflow-hidden border h-[70vh] relative">
               <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium">
-                {`${locationName} • ${searchRadius >= 1000 ? `${(searchRadius / 1000).toFixed(1)} km` : `${searchRadius} m`} Radius`}
+                {`${locationName} • ${FIXED_SEARCH_RADIUS}m Radius`}
                 <Badge variant="secondary" className="ml-2">
-                  {vehicles.length} Fahrzeuge
+                  {vehicles.length} E-Scooter
                 </Badge>
               </div>
 
               {loading && (
                 <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
                   <Loader2 className="h-8 w-8 animate-spin" />
-                  <span className="ml-2">Fahrzeuge werden geladen...</span>
+                  <span className="ml-2">E-Scooter werden geladen...</span>
                 </div>
               )}
 
               <Map
                 center={location}
+                initialZoom={INITIAL_MAP_ZOOM}
                 vehicles={vehicles}
                 onVehicleSelect={handleVehicleSelect}
-                searchRadius={searchRadius}
+                searchRadius={FIXED_SEARCH_RADIUS}
+                userLocation={userLocationMarker}
                 showRadius={true}
               />
             </div>

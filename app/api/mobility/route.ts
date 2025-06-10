@@ -3,45 +3,38 @@ import { type NextRequest, NextResponse } from "next/server"
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
 
-  // Get parameters from the request
   const geometry = searchParams.get("Geometry")
-  const tolerance = searchParams.get("Tolerance") || "5000" // Default 5km radius
-  const filters = searchParams.getAll("filters")
-  // Always use esrijson for this endpoint as per user request
+  const tolerance = searchParams.get("Tolerance") // This will be fixed to 500 by the client
+  const filters = searchParams.getAll("filters") // This will be fixed to E-Scooter by the client
   const geometryFormat = "esrijson"
   const offset = searchParams.get("offset") || "0"
 
   try {
-    // Always use the identify endpoint for spatial queries
     const apiUrl = new URL("https://api.sharedmobility.ch/v1/sharedmobility/identify")
 
-    // Add parameters to the API URL
     if (geometry) {
       apiUrl.searchParams.append("Geometry", geometry)
     } else {
-      // If no specific location provided, use a default location in central Switzerland
-      // This is Lucerne coordinates as a central point in Switzerland
-      apiUrl.searchParams.append("Geometry", "8.3093,47.0502") // lon,lat
-      // Use a large tolerance to cover most of Switzerland
-      apiUrl.searchParams.append("Tolerance", "50000") // 50km radius
+      // Default to Lucerne if no geometry is provided (should ideally not happen with client-side defaults)
+      apiUrl.searchParams.append("Geometry", "8.3093,47.0502")
+      apiUrl.searchParams.append("Tolerance", "50000") // Wider tolerance for default
     }
 
-    // Add the tolerance parameter
-    if (geometry) {
+    if (tolerance) {
+      // Client will send the fixed tolerance
       apiUrl.searchParams.append("Tolerance", tolerance)
     }
 
     apiUrl.searchParams.append("geometryFormat", geometryFormat)
     apiUrl.searchParams.append("offset", offset)
 
-    // Add filters
     filters.forEach((filter) => {
+      // Client will send the fixed E-Scooter filter
       apiUrl.searchParams.append("filters", filter)
     })
 
     console.log("Fetching mobility data (esrijson) from:", apiUrl.toString())
 
-    // Fetch data from the external API
     const response = await fetch(apiUrl.toString(), {
       headers: {
         Accept: "application/json",

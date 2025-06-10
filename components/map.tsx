@@ -1,13 +1,23 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { MapContainer, TileLayer, Marker, Popup, useMap, Circle, LayerGroup } from "react-leaflet"
-import L from "leaflet"
+import type React from "react"
+import { useEffect } from "react"
+import { MapContainer, TileLayer, Marker, Popup, useMap, Circle, LayerGroup, CircleMarker } from "react-leaflet"
+import L, { type LatLngExpression } from "leaflet"
 import "leaflet/dist/leaflet.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { Button } from "@/components/ui/button"
 
-// Instead, use this approach for the default icon:
+interface MapProps {
+  center: [number, number]
+  initialZoom: number
+  vehicles: MobilityVehicle[]
+  onVehicleSelect: (vehicle: MobilityVehicle) => void
+  userLocation: [number, number] | null
+  searchRadius: number
+  showRadius: boolean // Diese Prop steuert die Anzeige des Radius
+}
+
 const defaultIcon = new L.Icon({
   iconUrl: "/default-marker.svg",
   iconSize: [32, 32],
@@ -15,7 +25,6 @@ const defaultIcon = new L.Icon({
   popupAnchor: [0, -32],
 })
 
-// Custom icons for different vehicle types
 const bikeIcon = new L.Icon({
   iconUrl: "/bike-marker.svg",
   iconSize: [32, 32],
@@ -37,7 +46,6 @@ const scooterIcon = new L.Icon({
   popupAnchor: [0, -32],
 })
 
-// Component to update map center and zoom when props change
 function MapController({
   center,
   vehicles,
@@ -48,105 +56,93 @@ function MapController({
   searchRadius: number
 }) {
   const map = useMap()
-  const prevCenter = useRef<[number, number]>(center)
-  const prevVehicles = useRef<number>(vehicles.length)
-  const prevRadius = useRef<number>(searchRadius)
 
   useEffect(() => {
-    // Only update if the center has actually changed
-    if (prevCenter.current[0] !== center[0] || prevCenter.current[1] !== center[1]) {
-      prevCenter.current = center
-      map.setView(center, getZoomLevel(searchRadius))
+    const zoomForRadius = (radius: number): number => {
+      if (radius <= 250) return 17
+      if (radius <= 500) return 16
+      if (radius <= 1000) return 15
+      if (radius <= 2000) return 14
+      if (radius <= 5000) return 13
+      return 12
     }
+    const maxZoomForFit = 18
 
-    // If radius changed, adjust zoom level
-    if (prevRadius.current !== searchRadius) {
-      prevRadius.current = searchRadius
-      map.setView(center, getZoomLevel(searchRadius))
-    }
+    const leafletCenter: LatLngExpression = [center[0], center[1]]
 
-    // If vehicles changed and we have vehicles, fit bounds
-    if (prevVehicles.current !== vehicles.length && vehicles.length > 0) {
-      prevVehicles.current = vehicles.length
+    if (vehicles.length > 0) {
+      const bounds = new L.LatLngBounds()
+      bounds.extend(leafletCenter)
 
-      // Create bounds from all vehicle positions
-      const bounds = new L.LatLngBounds([])
-
-      // Add center point to bounds
-      bounds.extend(center)
-
-      // Add all vehicle positions to bounds
       vehicles.forEach((vehicle) => {
         const coords = vehicle.geometry.coordinates
-        bounds.extend([coords[1], coords[0]])
+        const vehicleLatLng: LatLngExpression = [coords[1], coords[0]]
+        bounds.extend(vehicleLatLng)
       })
 
-      // Only fit bounds if we have a valid bounds object
       if (bounds.isValid()) {
-        map.fitBounds(bounds, {
-          padding: [50, 50],
-          maxZoom: getZoomLevel(searchRadius), // Don't zoom in too far
-        })
-      }
-    }
-  }, [center, map, vehicles, searchRadius])
+        const southWest = bounds.getSouthWest()
+        const northEast = bounds.getNorthEast()
+        const isEffectivelyPoint = southWest.distanceTo(northEast) < 10
 
-  // Calculate appropriate zoom level based on radius
-  function getZoomLevel(radius: number): number {
-    if (radius <= 1000) return 15 // 1km or less
-    if (radius <= 2000) return 14 // 2km
-    if (radius <= 5000) return 13 // 5km
-    if (radius <= 10000) return 12 // 10km
-    if (radius <= 20000) return 11 // 20km
-    if (radius <= 50000) return 9 // 50km
-    return 8 // More than 50km
-  }
+        if (isEffectivelyPoint && vehicles.length <= 1) {
+          map.setView(leafletCenter, zoomForRadius(searchRadius))
+        } else {
+          map.fitBounds(bounds, { padding: [50, 50], maxZoom: maxZoomForFit })
+        }
+      } else {
+        map.setView(leafletCenter, zoomForRadius(searchRadius))
+      }
+    } else {
+      map.setView(leafletCenter, zoomForRadius(searchRadius))
+    }
+  }, [center, vehicles, searchRadius, map])
 
   return null
 }
 
-interface MapProps {
-  center: [number, number]
-  vehicles: MobilityVehicle[]
-  onVehicleSelect: (vehicle: MobilityVehicle) => void
-  searchRadius: number
-  showRadius?: boolean
+const getVehicleIcon = (vehicleType: string) => {
+  switch (vehicleType?.toLowerCase()) {
+    case "bicycle":
+    case "bike":
+    case "e-bike":
+      return bikeIcon
+    case "car":
+      return carIcon
+    case "scooter":
+    case "e-scooter":
+    case "moped":
+      return scooterIcon
+    default:
+      return defaultIcon
+  }
 }
 
-export default function Map({ center, vehicles, onVehicleSelect, searchRadius, showRadius = true }: MapProps) {
-  // Get appropriate icon based on vehicle type
-  const getVehicleIcon = (vehicleType: string) => {
-    switch (vehicleType?.toLowerCase()) {
-      case "bicycle":
-      case "bike":
-      case "e-bike":
-        return bikeIcon
-      case "car":
-        return carIcon
-      case "scooter":
-      case "e-scooter":
-      case "moped":
-        return scooterIcon
-      default:
-        return defaultIcon
-    }
+const Map: React.FC<MapProps> = ({
+  center,
+  initialZoom,
+  vehicles,
+  onVehicleSelect,
+  userLocation,
+  searchRadius,
+  showRadius, // Prop wird hier empfangen
+}) => {
+  const blueDotOptions = {
+    color: "#3b82f6",
+    fillColor: "#3b82f6",
+    fillOpacity: 1,
   }
 
-  // Calculate initial zoom based on search radius
-  const getInitialZoom = (radius: number): number => {
-    if (radius <= 1000) return 15 // 1km or less
-    if (radius <= 2000) return 14 // 2km
-    if (radius <= 5000) return 13 // 5km
-    if (radius <= 10000) return 12 // 10km
-    if (radius <= 20000) return 11 // 20km
-    if (radius <= 50000) return 9 // 50km
-    return 8 // More than 50km
-  }
-
-  const initialZoom = getInitialZoom(searchRadius)
+  const leafletCenter: LatLngExpression = [center[0], center[1]]
+  const userLeafletLocation: LatLngExpression | null = userLocation ? [userLocation[0], userLocation[1]] : null
 
   return (
-    <MapContainer center={center} zoom={initialZoom} style={{ height: "100%", width: "100%" }} scrollWheelZoom={true}>
+    <MapContainer
+      center={leafletCenter}
+      zoom={initialZoom}
+      style={{ height: "100%", width: "100%" }}
+      scrollWheelZoom={true}
+    >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -154,10 +150,10 @@ export default function Map({ center, vehicles, onVehicleSelect, searchRadius, s
 
       <MapController center={center} vehicles={vehicles} searchRadius={searchRadius} />
 
-      {/* Show search radius circle */}
+      {/* Dieser Block zeigt den Radius an, wenn showRadius true ist */}
       {showRadius && (
         <Circle
-          center={center}
+          center={leafletCenter}
           radius={searchRadius}
           pathOptions={{
             color: "#3b82f6",
@@ -168,15 +164,18 @@ export default function Map({ center, vehicles, onVehicleSelect, searchRadius, s
         />
       )}
 
+      {userLeafletLocation && (
+        <CircleMarker center={userLeafletLocation} pathOptions={blueDotOptions} radius={8}>
+          <Popup>Ihr aktueller Standort</Popup>
+        </CircleMarker>
+      )}
+
       <LayerGroup>
         {vehicles.map((vehicle) => {
           const coords = vehicle.geometry.coordinates
+          const vehiclePosition: LatLngExpression = [coords[1], coords[0]]
           return (
-            <Marker
-              key={vehicle.id}
-              position={[coords[1], coords[0]]} // [lat, lng]
-              icon={getVehicleIcon(vehicle.properties.vehicle_type)}
-            >
+            <Marker key={vehicle.id} position={vehiclePosition} icon={getVehicleIcon(vehicle.properties.vehicle_type)}>
               <Popup>
                 <div className="p-1">
                   <h3 className="font-semibold">{vehicle.properties.provider.name}</h3>
@@ -196,3 +195,5 @@ export default function Map({ center, vehicles, onVehicleSelect, searchRadius, s
     </MapContainer>
   )
 }
+
+export default Map
