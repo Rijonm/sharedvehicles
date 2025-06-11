@@ -3,12 +3,12 @@
 import type React from "react"
 import { useEffect } from "react"
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle, LayerGroup, CircleMarker } from "react-leaflet"
-import L, { type LatLngExpression, type PointExpression } from "leaflet" // PointExpression importiert
+import L, { type LatLngExpression, type PointExpression } from "leaflet"
 import "leaflet/dist/leaflet.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone, Users } from "lucide-react"
+import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone } from "lucide-react" // Users icon removed
 import Link from "next/link"
 
 interface MapProps {
@@ -86,9 +86,11 @@ const getReactVehicleIcon = (vehicleType: string, className?: string) => {
     case "scooter":
     case "e-scooter":
     case "moped":
+      // Using Smartphone icon as a placeholder for scooters/mopeds if no specific icon is available
+      // You might want to add a specific Scooter icon from lucide-react if one exists or use a generic one
       return <Smartphone className={className || "h-5 w-5"} />
     default:
-      return null
+      return null // Or a generic placeholder icon
   }
 }
 
@@ -156,9 +158,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   const leafletCenter: LatLngExpression = [center[0], center[1]]
   const userLeafletLocation: LatLngExpression | null = userLocation ? [userLocation[0], userLocation[1]] : null
 
-  // Definiere den Padding-Wert für das Auto-Panning des Popups.
-  // [links/rechts, oben/unten] oder PointExpression
-  const autoPanPaddingValue: PointExpression = [10, 55] // 10px horizontal, 55px vertikal (besonders oben)
+  const autoPanPaddingValue: PointExpression = [10, 55]
 
   return (
     <MapContainer
@@ -227,10 +227,10 @@ const LeafletMapComponent: React.FC<MapProps> = ({
                       </h4>
                       <p className="text-muted-foreground">{station.name}</p>
                       {station.address && <p className="text-xs text-gray-500">{station.address}</p>}
-                      {station.status && (
+                      {station.status && typeof station.status.num_vehicle_available === "number" && (
                         <p className="text-xs text-gray-500 flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {station.status.num_vehicle_available || 0} Fahrzeuge verfügbar
+                          {getReactVehicleIcon(vehicle_type, "h-3 w-3 mr-0.5")} {/* Dynamisches Icon hier */}
+                          {station.status.num_vehicle_available} Fahrzeuge verfügbar
                         </p>
                       )}
                     </div>
@@ -253,13 +253,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
                   )}
                   <div className="mt-3 pt-2 border-t">
                     {appStoreLink ? (
-                      <Button
-                        asChild
-                        size="xs" // Behält die Basisgröße für Konsistenz
-                        variant="secondary"
-                        // Tailwind-Klassen für Padding: py-1 für mobil, md:py-1.5 für Desktop (etwas höher)
-                        className="w-full py-1 md:py-1.5 h-auto" // h-auto damit Padding die Höhe bestimmt
-                      >
+                      <Button asChild size="xs" variant="secondary" className="w-full py-1 md:py-1.5 h-auto">
                         <Link href={appStoreLink} target="_blank" rel="noopener noreferrer">
                           App öffnen <ExternalLink className="ml-1.5 h-3 w-3" />
                         </Link>
