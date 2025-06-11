@@ -4,11 +4,12 @@ import { useState, useEffect, useRef } from "react"
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react"
+import { Loader2, AlertCircle, RefreshCw, Info } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import AddToHomescreenModal from "@/components/add-to-homescreen-modal"
 
 import dynamic from "next/dynamic"
 import type { MobilityVehicle, EsriJsonFeature } from "@/types/mobility"
@@ -53,6 +54,7 @@ export default function Home() {
   const [locationName, setLocationName] = useState<string>("")
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [isHomescreenModalOpen, setIsHomescreenModalOpen] = useState(false)
 
   const { toast } = useToast()
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -257,21 +259,33 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col">
       <div className="container mx-auto px-4 py-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-          <div>
+        <div className="flex flex-row justify-between items-center mb-6">
+          <div className="flex-1">
             <img src="/my-ride-radar-logo.png" alt="My Ride Radar Logo" className="h-7 sm:h-8 w-auto" />
             <p className="text-sm text-gray-600 mt-2">Alle Sharing-Anbieter auf einen Blick.</p>
           </div>
-          {/* Desktop Refresh Button - hidden on small screens, visible sm and up */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refreshData}
-            className="hidden sm:flex items-center gap-1 mt-4 sm:mt-0"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Aktualisieren
-          </Button>
+          <div className="flex items-center">
+            {/* Info Button - visible ONLY on mobile screens, now smaller */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsHomescreenModalOpen(true)}
+              className="h-6 w-6 sm:hidden p-0"
+              aria-label="Informationen zum Hinzufügen zum Startbildschirm"
+            >
+              <Info className="h-3.5 w-3.5 text-gray-500" />
+            </Button>
+            {/* Desktop Refresh Button - hidden on small screens, visible sm and up */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshData}
+              className="hidden sm:flex items-center gap-1 ml-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Aktualisieren
+            </Button>
+          </div>
         </div>
 
         {/* Desktop Last Updated - hidden on small screens, visible sm and up */}
@@ -319,8 +333,6 @@ export default function Home() {
 
           <div className="md:col-span-3">
             <div className="rounded-lg overflow-hidden border h-[70vh] relative" ref={mapContainerRef}>
-              {" "}
-              {/* Ref hier hinzugefügt */}
               {locationName && !loading && (
                 <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium">
                   {`${locationName} • ${FIXED_SEARCH_RADIUS}m Radius`}
@@ -354,6 +366,9 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Add to Homescreen Modal */}
+      <AddToHomescreenModal open={isHomescreenModalOpen} onOpenChange={setIsHomescreenModalOpen} />
     </main>
   )
 }
