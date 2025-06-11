@@ -8,7 +8,7 @@ import { Bike, Car, ExternalLink, MapPin, Phone, X, CreditCard } from "lucide-re
 import Link from "next/link"
 
 const providerPricing: Record<string, { unlockFee: string; perMinuteRate: string }> = {
-  "Bolt Technology OÜ": { unlockFee: "0 CHF", perMinuteRate: "0.49 CHF" },
+  "Bolt Technology OÜ": { unlockFee: "0.50 CHF", perMinuteRate: "0.49 CHF" },
   "Voi Technology AB": { unlockFee: "1 CHF", perMinuteRate: "0.44 CHF" },
   "bird basel": { unlockFee: "1 CHF", perMinuteRate: "0.45 CHF" },
   "Lime City partners from Partners::RegionFeedMediator": { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" },
