@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next"
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "My Ride Radar",
-    short_name: "RideRadar",
+    name: "MyRideRadar",
+    short_name: "MyRideRadar", // Hier wurde die Änderung vorgenommen
     description: "Finde Sharing-Angebote in deiner Nähe.",
     start_url: "/",
     display: "standalone", // Wichtig für das PWA-Feeling
