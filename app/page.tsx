@@ -24,12 +24,12 @@ const LeafletMap = dynamic(() => import("@/components/map"), {
   ),
 })
 
+// Updated default locations with precise SBB train station coordinates
 const defaultLocations = [
-  { name: "Zürich", coords: [47.3769, 8.5417] },
-  { name: "Genf", coords: [46.2044, 6.1432] },
-  { name: "Basel", coords: [47.5596, 7.5886] },
-  { name: "Bern", coords: [46.948, 7.4474] },
-  { name: "Lausanne", coords: [46.5197, 6.6323] },
+  { name: "Zürich SBB", coords: [47.3779, 8.5402] as [number, number] },
+  { name: "Genf SBB", coords: [46.2108, 6.1426] as [number, number] },
+  { name: "Basel SBB", coords: [47.5474, 7.5898] as [number, number] },
+  { name: "Bern SBB", coords: [46.9498, 7.4391] as [number, number] },
 ]
 
 const FIXED_SEARCH_RADIUS = 400 // Search radius set to 400m
