@@ -4,8 +4,18 @@ import type { MobilityVehicle } from "@/types/mobility"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Bike, Car, ExternalLink, MapPin, Phone, X } from "lucide-react"
+import { Bike, Car, ExternalLink, MapPin, Phone, X, CreditCard } from "lucide-react"
 import Link from "next/link"
+
+const providerPricing: Record<string, { unlockFee: string; perMinuteRate: string }> = {
+  "Bolt Technology OÜ": { unlockFee: "0 CHF", perMinuteRate: "0.49 CHF" },
+  "Voi Technology AB": { unlockFee: "1 CHF", perMinuteRate: "0.44 CHF" },
+  "bird basel": { unlockFee: "1 CHF", perMinuteRate: "0.45 CHF" },
+  "Lime City partners from Partners::RegionFeedMediator": { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" },
+  // Stelle sicher, dass die Namen exakt mit denen aus der API übereinstimmen
+  // Beispiel für Lime, falls der Name in der API leicht abweicht:
+  // "Lime": { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" },
+}
 
 interface VehicleDetailsProps {
   vehicle: MobilityVehicle
@@ -15,6 +25,7 @@ interface VehicleDetailsProps {
 export default function VehicleDetails({ vehicle, onClose }: VehicleDetailsProps) {
   const { properties } = vehicle
   const { provider, station, vehicle_type, available } = properties
+  const pricing = providerPricing[provider.name] // Hier holen wir die Tarifinfo
 
   // Get appropriate icon based on vehicle type
   const getVehicleIcon = () => {
@@ -83,6 +94,16 @@ export default function VehicleDetails({ vehicle, onClose }: VehicleDetailsProps
                   <Phone className="h-3 w-3" /> {provider.phone}
                 </p>
               )}
+            </div>
+          )}
+
+          {pricing && (
+            <div className="grid gap-1">
+              <h3 className="font-semibold text-sm flex items-center gap-1">
+                <CreditCard className="h-4 w-4" /> Tarifinformationen
+              </h3>
+              <p className="text-sm">Freischaltgebühr: {pricing.unlockFee}</p>
+              <p className="text-sm">Pro Minute: {pricing.perMinuteRate}</p>
             </div>
           )}
         </div>
