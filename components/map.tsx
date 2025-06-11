@@ -7,17 +7,21 @@ import L, { type LatLngExpression } from "leaflet"
 import "leaflet/dist/leaflet.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone, Users } from "lucide-react" // Icons für Popup
+import Link from "next/link"
 
 interface MapProps {
   center: [number, number]
   initialZoom: number
   vehicles: MobilityVehicle[]
-  onVehicleSelect: (vehicle: MobilityVehicle) => void
+  onVehicleSelect: (vehicle: MobilityVehicle) => void // Behalten wir vorerst, falls es noch anderweitig genutzt wird
   userLocation: [number, number] | null
   searchRadius: number
-  showRadius: boolean // Diese Prop steuert die Anzeige des Radius
+  showRadius: boolean
 }
 
+// Leaflet Marker Icons
 const defaultIcon = new L.Icon({
   iconUrl: "/default-marker.svg",
   iconSize: [32, 32],
@@ -45,6 +49,51 @@ const scooterIcon = new L.Icon({
   iconAnchor: [16, 32],
   popupAnchor: [0, -32],
 })
+
+// Preisinformationen (ähnlich wie in VehicleDetails.tsx)
+const providerPricing: Record<string, { unlockFee: string; perMinuteRate: string }> = {
+  "Bolt Technology OÜ": { unlockFee: "0.50 CHF", perMinuteRate: "0.49 CHF" },
+  "Voi Technology AB": { unlockFee: "1 CHF", perMinuteRate: "0.44 CHF" },
+  "bird basel": { unlockFee: "1 CHF", perMinuteRate: "0.45 CHF" },
+  "Lime City partners from Partners::RegionFeedMediator": { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" },
+  Lime: { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" }, // Fallback für "Lime"
+}
+
+// Helper für Leaflet Marker Icons
+const getLeafletVehicleIcon = (vehicleType: string) => {
+  switch (vehicleType?.toLowerCase()) {
+    case "bicycle":
+    case "bike":
+    case "e-bike":
+      return bikeIcon
+    case "car":
+      return carIcon
+    case "scooter":
+    case "e-scooter":
+    case "moped":
+      return scooterIcon
+    default:
+      return defaultIcon
+  }
+}
+
+// Helper für React Icons im Popup
+const getReactVehicleIcon = (vehicleType: string, className?: string) => {
+  switch (vehicleType?.toLowerCase()) {
+    case "bicycle":
+    case "bike":
+    case "e-bike":
+      return <Bike className={className || "h-5 w-5"} />
+    case "car":
+      return <Car className={className || "h-5 w-5"} />
+    case "scooter":
+    case "e-scooter":
+    case "moped":
+      return <Smartphone className={className || "h-5 w-5"} /> // Beispiel, ggf. anpassen
+    default:
+      return null
+  }
+}
 
 function MapController({
   center,
@@ -101,31 +150,14 @@ function MapController({
   return null
 }
 
-const getVehicleIcon = (vehicleType: string) => {
-  switch (vehicleType?.toLowerCase()) {
-    case "bicycle":
-    case "bike":
-    case "e-bike":
-      return bikeIcon
-    case "car":
-      return carIcon
-    case "scooter":
-    case "e-scooter":
-    case "moped":
-      return scooterIcon
-    default:
-      return defaultIcon
-  }
-}
-
-const Map: React.FC<MapProps> = ({
+const LeafletMapComponent: React.FC<MapProps> = ({
   center,
   initialZoom,
   vehicles,
   onVehicleSelect,
   userLocation,
   searchRadius,
-  showRadius, // Prop wird hier empfangen
+  showRadius,
 }) => {
   const blueDotOptions = {
     color: "#3b82f6",
@@ -150,7 +182,6 @@ const Map: React.FC<MapProps> = ({
 
       <MapController center={center} vehicles={vehicles} searchRadius={searchRadius} />
 
-      {/* Dieser Block zeigt den Radius an, wenn showRadius true ist */}
       {showRadius && (
         <Circle
           center={leafletCenter}
@@ -174,17 +205,86 @@ const Map: React.FC<MapProps> = ({
         {vehicles.map((vehicle) => {
           const coords = vehicle.geometry.coordinates
           const vehiclePosition: LatLngExpression = [coords[1], coords[0]]
+          const { properties } = vehicle
+          const { provider, station, vehicle_type, available } = properties
+          const pricing = providerPricing[provider.name] || providerPricing[provider.name.split(" ")[0]] // Fallback für z.B. "Lime"
+          const appStoreLink = provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.store_uri?.[0]
+
           return (
-            <Marker key={vehicle.id} position={vehiclePosition} icon={getVehicleIcon(vehicle.properties.vehicle_type)}>
-              <Popup>
-                <div className="p-1">
-                  <h3 className="font-semibold">{vehicle.properties.provider.name}</h3>
-                  {vehicle.properties.station?.name && <p className="text-sm">{vehicle.properties.station.name}</p>}
-                  <p className="text-xs text-muted-foreground mt-1">{vehicle.properties.vehicle_type}</p>
-                  <div className="mt-2">
-                    <Button size="sm" onClick={() => onVehicleSelect(vehicle)} className="w-full">
-                      Details anzeigen
-                    </Button>
+            <Marker
+              key={vehicle.id}
+              position={vehiclePosition}
+              icon={getLeafletVehicleIcon(vehicle.properties.vehicle_type)}
+            >
+              <Popup minWidth={280}>
+                <div className="p-1 space-y-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    {getReactVehicleIcon(vehicle_type, "h-4 w-4 text-gray-700")}
+                    <h3 className="font-semibold text-sm text-gray-800">{provider.name}</h3>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <p className="text-muted-foreground">{vehicle_type}</p>
+                    {available ? (
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-green-50 text-green-700 hover:bg-green-50 px-1.5 py-0.5"
+                      >
+                        Verfügbar
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs bg-red-50 text-red-700 hover:bg-red-50 px-1.5 py-0.5">
+                        Belegt
+                      </Badge>
+                    )}
+                  </div>
+
+                  {station && (
+                    <div className="border-t pt-1.5 mt-1.5 space-y-1">
+                      <h4 className="font-medium text-xs flex items-center gap-1 text-gray-600">
+                        <MapPin className="h-3 w-3" /> Station:
+                      </h4>
+                      <p className="text-muted-foreground">{station.name}</p>
+                      {station.address && <p className="text-xs text-gray-500">{station.address}</p>}
+                      {station.status && (
+                        <p className="text-xs text-gray-500 flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          {station.status.num_vehicle_available || 0} Fahrzeuge verfügbar
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {provider.phone && (
+                    <div className="border-t pt-1.5 mt-1.5">
+                      <p className="text-xs text-gray-500 flex items-center gap-1">
+                        <Phone className="h-3 w-3" /> {provider.phone}
+                      </p>
+                    </div>
+                  )}
+
+                  {pricing && (
+                    <div className="border-t pt-1 mt-1 space-y-0.5">
+                      <h4 className="font-medium text-xs flex items-center gap-1 text-gray-600 mb-0.5">
+                        <CreditCard className="h-3 w-3" /> Tarif:
+                      </h4>
+                      <p className="text-muted-foreground">Freischaltung: {pricing.unlockFee}</p>
+                      <p className="text-muted-foreground">Pro Minute: {pricing.perMinuteRate}</p>
+                    </div>
+                  )}
+
+                  <div className="mt-3 pt-2 border-t">
+                    {appStoreLink ? (
+                      <Button asChild size="xs" variant="secondary" className="w-full">
+                        <Link href={appStoreLink} target="_blank" rel="noopener noreferrer">
+                          App öffnen <ExternalLink className="ml-1.5 h-3 w-3" />
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button size="xs" className="w-full" disabled>
+                        Keine App Info
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Popup>
@@ -196,4 +296,4 @@ const Map: React.FC<MapProps> = ({
   )
 }
 
-export default Map
+export default LeafletMapComponent
