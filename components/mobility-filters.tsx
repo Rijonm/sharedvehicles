@@ -186,7 +186,7 @@ export default function MobilityFilters({
         <Card className="mt-4">
           <CardHeader className="py-2">
             <CardTitle className="text-xs flex items-center gap-1">
-              <MapPin className="h-3 w-3" /> Beliebte Städte
+              <MapPin className="h-3 w-3" /> Beliebte Orte
             </CardTitle>
           </CardHeader>
           <CardContent className="py-2">
