@@ -3,19 +3,19 @@
 import type React from "react"
 import { useEffect } from "react"
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle, LayerGroup, CircleMarker } from "react-leaflet"
-import L, { type LatLngExpression } from "leaflet"
+import L, { type LatLngExpression, type PointExpression } from "leaflet" // PointExpression importiert
 import "leaflet/dist/leaflet.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone, Users } from "lucide-react" // Icons für Popup
+import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone, Users } from "lucide-react"
 import Link from "next/link"
 
 interface MapProps {
   center: [number, number]
   initialZoom: number
   vehicles: MobilityVehicle[]
-  onVehicleSelect: (vehicle: MobilityVehicle) => void // Behalten wir vorerst, falls es noch anderweitig genutzt wird
+  onVehicleSelect: (vehicle: MobilityVehicle) => void
   userLocation: [number, number] | null
   searchRadius: number
   showRadius: boolean
@@ -50,16 +50,14 @@ const scooterIcon = new L.Icon({
   popupAnchor: [0, -32],
 })
 
-// Preisinformationen (ähnlich wie in VehicleDetails.tsx)
 const providerPricing: Record<string, { unlockFee: string; perMinuteRate: string }> = {
   "Bolt Technology OÜ": { unlockFee: "0.50 CHF", perMinuteRate: "0.49 CHF" },
   "Voi Technology AB": { unlockFee: "1 CHF", perMinuteRate: "0.44 CHF" },
   "bird basel": { unlockFee: "1 CHF", perMinuteRate: "0.45 CHF" },
   "Lime City partners from Partners::RegionFeedMediator": { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" },
-  Lime: { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" }, // Fallback für "Lime"
+  Lime: { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" },
 }
 
-// Helper für Leaflet Marker Icons
 const getLeafletVehicleIcon = (vehicleType: string) => {
   switch (vehicleType?.toLowerCase()) {
     case "bicycle":
@@ -77,7 +75,6 @@ const getLeafletVehicleIcon = (vehicleType: string) => {
   }
 }
 
-// Helper für React Icons im Popup
 const getReactVehicleIcon = (vehicleType: string, className?: string) => {
   switch (vehicleType?.toLowerCase()) {
     case "bicycle":
@@ -89,7 +86,7 @@ const getReactVehicleIcon = (vehicleType: string, className?: string) => {
     case "scooter":
     case "e-scooter":
     case "moped":
-      return <Smartphone className={className || "h-5 w-5"} /> // Beispiel, ggf. anpassen
+      return <Smartphone className={className || "h-5 w-5"} />
     default:
       return null
   }
@@ -116,24 +113,20 @@ function MapController({
       return 12
     }
     const maxZoomForFit = 18
-
     const leafletCenter: LatLngExpression = [center[0], center[1]]
 
     if (vehicles.length > 0) {
       const bounds = new L.LatLngBounds()
       bounds.extend(leafletCenter)
-
       vehicles.forEach((vehicle) => {
         const coords = vehicle.geometry.coordinates
         const vehicleLatLng: LatLngExpression = [coords[1], coords[0]]
         bounds.extend(vehicleLatLng)
       })
-
       if (bounds.isValid()) {
         const southWest = bounds.getSouthWest()
         const northEast = bounds.getNorthEast()
         const isEffectivelyPoint = southWest.distanceTo(northEast) < 10
-
         if (isEffectivelyPoint && vehicles.length <= 1) {
           map.setView(leafletCenter, zoomForRadius(searchRadius))
         } else {
@@ -159,14 +152,13 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   searchRadius,
   showRadius,
 }) => {
-  const blueDotOptions = {
-    color: "#3b82f6",
-    fillColor: "#3b82f6",
-    fillOpacity: 1,
-  }
-
+  const blueDotOptions = { color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1 }
   const leafletCenter: LatLngExpression = [center[0], center[1]]
   const userLeafletLocation: LatLngExpression | null = userLocation ? [userLocation[0], userLocation[1]] : null
+
+  // Definiere den Padding-Wert für das Auto-Panning des Popups.
+  // [links/rechts, oben/unten] oder PointExpression
+  const autoPanPaddingValue: PointExpression = [10, 55] // 10px horizontal, 55px vertikal (besonders oben)
 
   return (
     <MapContainer
@@ -179,35 +171,26 @@ const LeafletMapComponent: React.FC<MapProps> = ({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-
       <MapController center={center} vehicles={vehicles} searchRadius={searchRadius} />
-
       {showRadius && (
         <Circle
           center={leafletCenter}
           radius={searchRadius}
-          pathOptions={{
-            color: "#3b82f6",
-            fillColor: "#3b82f680",
-            fillOpacity: 0.1,
-            weight: 1,
-          }}
+          pathOptions={{ color: "#3b82f6", fillColor: "#3b82f680", fillOpacity: 0.1, weight: 1 }}
         />
       )}
-
       {userLeafletLocation && (
         <CircleMarker center={userLeafletLocation} pathOptions={blueDotOptions} radius={8}>
           <Popup>Ihr aktueller Standort</Popup>
         </CircleMarker>
       )}
-
       <LayerGroup>
         {vehicles.map((vehicle) => {
           const coords = vehicle.geometry.coordinates
           const vehiclePosition: LatLngExpression = [coords[1], coords[0]]
           const { properties } = vehicle
           const { provider, station, vehicle_type, available } = properties
-          const pricing = providerPricing[provider.name] || providerPricing[provider.name.split(" ")[0]] // Fallback für z.B. "Lime"
+          const pricing = providerPricing[provider.name] || providerPricing[provider.name.split(" ")[0]]
           const appStoreLink = provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.store_uri?.[0]
 
           return (
@@ -216,13 +199,12 @@ const LeafletMapComponent: React.FC<MapProps> = ({
               position={vehiclePosition}
               icon={getLeafletVehicleIcon(vehicle.properties.vehicle_type)}
             >
-              <Popup minWidth={280}>
+              <Popup minWidth={280} autoPanPaddingTopLeft={autoPanPaddingValue} autoPanPaddingBottomRight={[10, 10]}>
                 <div className="p-1 space-y-2 text-xs">
                   <div className="flex items-center gap-2">
                     {getReactVehicleIcon(vehicle_type, "h-4 w-4 text-gray-700")}
                     <h3 className="font-semibold text-sm text-gray-800">{provider.name}</h3>
                   </div>
-
                   <div className="flex items-center justify-between">
                     <p className="text-muted-foreground">{vehicle_type}</p>
                     {available ? (
@@ -238,7 +220,6 @@ const LeafletMapComponent: React.FC<MapProps> = ({
                       </Badge>
                     )}
                   </div>
-
                   {station && (
                     <div className="border-t pt-1.5 mt-1.5 space-y-1">
                       <h4 className="font-medium text-xs flex items-center gap-1 text-gray-600">
@@ -254,7 +235,6 @@ const LeafletMapComponent: React.FC<MapProps> = ({
                       )}
                     </div>
                   )}
-
                   {provider.phone && (
                     <div className="border-t pt-1.5 mt-1.5">
                       <p className="text-xs text-gray-500 flex items-center gap-1">
@@ -262,7 +242,6 @@ const LeafletMapComponent: React.FC<MapProps> = ({
                       </p>
                     </div>
                   )}
-
                   {pricing && (
                     <div className="border-t pt-1 mt-1 space-y-0.5">
                       <h4 className="font-medium text-xs flex items-center gap-1 text-gray-600 mb-0.5">
@@ -272,10 +251,15 @@ const LeafletMapComponent: React.FC<MapProps> = ({
                       <p className="text-muted-foreground">Pro Minute: {pricing.perMinuteRate}</p>
                     </div>
                   )}
-
                   <div className="mt-3 pt-2 border-t">
                     {appStoreLink ? (
-                      <Button asChild size="xs" variant="secondary" className="w-full">
+                      <Button
+                        asChild
+                        size="xs" // Behält die Basisgröße für Konsistenz
+                        variant="secondary"
+                        // Tailwind-Klassen für Padding: py-1 für mobil, md:py-1.5 für Desktop (etwas höher)
+                        className="w-full py-1 md:py-1.5 h-auto" // h-auto damit Padding die Höhe bestimmt
+                      >
                         <Link href={appStoreLink} target="_blank" rel="noopener noreferrer">
                           App öffnen <ExternalLink className="ml-1.5 h-3 w-3" />
                         </Link>
