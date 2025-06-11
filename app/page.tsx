@@ -252,27 +252,28 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col">
       <div className="container mx-auto px-4 py-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-  {/* Linker Bereich mit Titel und Beschreibung */}
-  <div>
-    <h1 className="text-2xl font-bold">My Ride Finder</h1>
-    <p className="text-sm text-gray-600">Gibt dir eine Übersicht über alle Sharing Angebote in der Schweiz.</p>
-  </div>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">My Ride Finder</h1>
+            <p className="text-sm text-gray-600">Gibt dir eine Übersicht über alle Sharing Angebote in der Schweiz.</p>
+          </div>
+          {/* Desktop Refresh Button - hidden on small screens, visible sm and up */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshData}
+            className="hidden sm:flex items-center gap-1 mt-4 sm:mt-0"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Aktualisieren
+          </Button>
+        </div>
 
-  {/* Rechter Bereich mit Button */}
-  <Button
-    variant="outline"
-    size="sm"
-    onClick={refreshData}
-    className="flex items-center gap-1 mt-4 sm:mt-0"
-  >
-    <RefreshCw className="h-4 w-4" />
-    Aktualisieren
-  </Button>
-</div>
-
+        {/* Desktop Last Updated - hidden on small screens, visible sm and up */}
         {lastUpdated && locationName && (
-          <p className="text-sm text-muted-foreground mb-4">Zuletzt aktualisiert: {lastUpdated.toLocaleTimeString()}</p>
+          <p className="text-sm text-muted-foreground mb-4 hidden sm:block">
+            Zuletzt aktualisiert: {lastUpdated.toLocaleTimeString()}
+          </p>
         )}
 
         {apiError && (
@@ -297,6 +298,18 @@ export default function Home() {
               onSetCurrentLocation={handleSetCurrentLocation}
               defaultLocations={defaultLocations}
             />
+            {/* Mobile Refresh Section - visible only on small screens (below sm) */}
+            <div className="mt-4 sm:hidden">
+              <div className="flex items-center justify-start space-x-3">
+                <Button variant="outline" size="sm" onClick={refreshData} className="flex items-center gap-1">
+                  <RefreshCw className="h-4 w-4" />
+                  Aktualisieren
+                </Button>
+                {lastUpdated && locationName && (
+                  <p className="text-xs text-muted-foreground">Aktualisiert: {lastUpdated.toLocaleTimeString()}</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="md:col-span-3">
