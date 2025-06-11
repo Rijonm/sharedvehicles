@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react" // Importiere useRef
+import { useState, useEffect, useRef } from "react"
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
@@ -55,7 +55,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const { toast } = useToast()
-  const mapContainerRef = useRef<HTMLDivElement>(null) // Erstelle einen Ref für den Karten-Container
+  const mapContainerRef = useRef<HTMLDivElement>(null)
 
   const handleSetCurrentLocation = () => {
     if (navigator.geolocation && window.isSecureContext) {
@@ -259,10 +259,8 @@ export default function Home() {
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold">My Ride Radar</h1>
-            <p className="text-sm text-gray-600">
-              Gibt dir eine Übersicht über alle Sharing Angebote in der Schweiz und deiner Umgebung.
-            </p>
+            <img src="/my-ride-radar-logo.png" alt="My Ride Radar Logo" className="h-7 sm:h-8 w-auto" />
+            <p className="text-sm text-gray-600 mt-2">Alle Sharing-Anbieter auf einen Blick.</p>
           </div>
           {/* Desktop Refresh Button - hidden on small screens, visible sm and up */}
           <Button
