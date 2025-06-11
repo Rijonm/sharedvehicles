@@ -253,7 +253,7 @@ export default function Home() {
     <main className="flex min-h-screen flex-col">
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-          <h1 className="text-3xl font-bold">Shared Mobility Finder</h1>
+          <h1 className="text-3xl font-bold">My Ride Finder</h1>
           <Button variant="outline" size="sm" onClick={refreshData} className="flex items-center gap-1 mt-2 sm:mt-0">
             <RefreshCw className="h-4 w-4" />
             Aktualisieren
