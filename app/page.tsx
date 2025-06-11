@@ -254,8 +254,8 @@ export default function Home() {
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
           <div>
-            <h1 className="text-2xl font-bold">My Ride Finder</h1>
-            <p className="text-sm text-gray-600">Gibt dir eine Übersicht über alle Sharing Angebote in der Schweiz.</p>
+            <h1 className="text-2xl font-bold">My Ride Radar</h1>
+            <p className="text-sm text-gray-600">Gibt dir eine Übersicht über alle Sharing Angebote in der Schweiz und deiner Umgebung.</p>
           </div>
           {/* Desktop Refresh Button - hidden on small screens, visible sm and up */}
           <Button
