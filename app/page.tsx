@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react" // Importiere useRef
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
@@ -55,6 +55,7 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const { toast } = useToast()
+  const mapContainerRef = useRef<HTMLDivElement>(null) // Erstelle einen Ref für den Karten-Container
 
   const handleSetCurrentLocation = () => {
     if (navigator.geolocation && window.isSecureContext) {
@@ -189,6 +190,10 @@ export default function Home() {
   useEffect(() => {
     if (location) {
       fetchSpatialVehicles()
+      // Scroll zur Karte, wenn ein Standort ausgewählt wurde
+      if (mapContainerRef.current) {
+        mapContainerRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
+      }
     } else {
       setVehicles([])
       setLoading(false)
@@ -255,7 +260,9 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold">My Ride Radar</h1>
-            <p className="text-sm text-gray-600">Gibt dir eine Übersicht über alle Sharing Angebote in der Schweiz und deiner Umgebung.</p>
+            <p className="text-sm text-gray-600">
+              Gibt dir eine Übersicht über alle Sharing Angebote in der Schweiz und deiner Umgebung.
+            </p>
           </div>
           {/* Desktop Refresh Button - hidden on small screens, visible sm and up */}
           <Button
@@ -313,7 +320,9 @@ export default function Home() {
           </div>
 
           <div className="md:col-span-3">
-            <div className="rounded-lg overflow-hidden border h-[70vh] relative">
+            <div className="rounded-lg overflow-hidden border h-[70vh] relative" ref={mapContainerRef}>
+              {" "}
+              {/* Ref hier hinzugefügt */}
               {locationName && !loading && (
                 <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium">
                   {`${locationName} • ${FIXED_SEARCH_RADIUS}m Radius`}
@@ -322,14 +331,12 @@ export default function Home() {
                   </Badge>
                 </div>
               )}
-
               {loading && (
                 <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
                   <Loader2 className="h-8 w-8 animate-spin" />
                   <span className="ml-2">Fahrzeuge werden geladen...</span>
                 </div>
               )}
-
               <LeafletMap
                 center={location || DEFAULT_MAP_CENTER}
                 initialZoom={location ? ACTIVE_SEARCH_INITIAL_ZOOM : DEFAULT_MAP_ZOOM_OVERVIEW}
