@@ -18,12 +18,12 @@ import "leaflet/dist/leaflet.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone } from "lucide-react" // Compass Icon
+import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone } from "lucide-react"
 import Link from "next/link"
 
 interface MapProps {
   center: [number, number]
-  initialZoom: number
+  initialZoom: number // Wird jetzt dynamischer gehandhabt
   vehicles: MobilityVehicle[]
   onVehicleSelect: (vehicle: MobilityVehicle) => void
   userLocation: [number, number] | null
@@ -32,8 +32,9 @@ interface MapProps {
   showRadius: boolean
   onMapInteraction: (newCenter: [number, number], type: "move" | "click") => void
   isSearchOnMapMoveActive: boolean
-  deviceHeading: number | null // Für Kompass
-  showCompass: boolean // Um Kompass-Marker zu steuern
+  deviceHeading: number | null
+  showCompass: boolean
+  isLiveTracking: boolean // Neuer Prop, um der Karte mitzuteilen, ob Live-Tracking aktiv ist
 }
 
 const providerColors: Record<string, { primary: string; background: string }> = {
@@ -127,7 +128,6 @@ const clickedLocationIcon = new L.Icon({
   popupAnchor: [0, -32],
 })
 
-// Kompass-Icon als SVG (Pfeil nach oben)
 const compassIconSvg = `
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%233B82F6" width="28px" height="28px" style="transform: rotate(var(--heading, 0deg)); transition: transform 0.1s ease-out;">
     <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 2.99.71-.71L12 2z"/>
@@ -137,7 +137,7 @@ const compassIconSvg = `
 function createCompassIcon(heading: number | null): L.DivIcon {
   const rotation = heading !== null ? heading : 0
   return L.divIcon({
-    html: `<div style="--heading: ${rotation}deg; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">${compassIconSvg.replace("%233B82F6", "#3B82F6")}</div>`, // Farbe hier direkt einsetzen
+    html: `<div style="--heading: ${rotation}deg; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">${compassIconSvg.replace("%233B82F6", "#3B82F6")}</div>`,
     className: "compass-marker-icon",
     iconSize: [28, 28],
     iconAnchor: [14, 14],
@@ -146,27 +146,39 @@ function createCompassIcon(heading: number | null): L.DivIcon {
 
 function MapLogicController({
   center,
-  initialZoom,
+  initialZoom, // Wird als Startzoom verwendet
   vehicles,
   searchRadius,
   onMapInteraction,
+  isLiveTracking, // Um das Verhalten der Karte anzupassen
 }: {
   center: [number, number]
   initialZoom: number
   vehicles: MobilityVehicle[]
   searchRadius: number
   onMapInteraction: (newCenter: [number, number], type: "move" | "click") => void
+  isLiveTracking: boolean
 }) {
   const map = useMap()
-  const isInitialLoad = useRef(true)
+  const isInitialLoadOrManualSearch = useRef(true) // Für initiales Laden oder manuelle Suche
   const internalCenterRef = useRef<L.LatLng>(L.latLng(center[0], center[1]))
 
   useEffect(() => {
-    if (isInitialLoad.current) {
-      map.setView(center, initialZoom)
-      isInitialLoad.current = false
+    const leafletCenter: LatLngExpression = [center[0], center[1]]
+
+    if (isLiveTracking) {
+      // Im Live-Tracking Modus, Karte immer auf den Nutzer zentrieren mit festem Zoom
+      map.setView(leafletCenter, initialZoom) // initialZoom ist hier der LIVE_TRACKING_ZOOM
+      internalCenterRef.current = L.latLng(center[0], center[1])
+      isInitialLoadOrManualSearch.current = false // Damit nicht die Logik unten greift
+    } else if (isInitialLoadOrManualSearch.current) {
+      // Initiales Laden oder nach manueller Suche/Klick
+      map.setView(leafletCenter, initialZoom)
+      isInitialLoadOrManualSearch.current = false
       internalCenterRef.current = L.latLng(center[0], center[1])
     } else {
+      // Dieser Block wird relevant, wenn sich `center` ändert, aber kein Live-Tracking aktiv ist
+      // und es nicht der initiale Ladevorgang ist (z.B. nach Klick auf Karte)
       const currentMapCenter = map.getCenter()
       if (currentMapCenter.lat !== center[0] || currentMapCenter.lng !== center[1]) {
         const zoomForRadius = (radius: number): number => {
@@ -178,7 +190,6 @@ function MapLogicController({
           return 12
         }
         const maxZoomForFit = 18
-        const leafletCenter: LatLngExpression = [center[0], center[1]]
         if (vehicles.length > 0) {
           const bounds = new L.LatLngBounds()
           bounds.extend(leafletCenter)
@@ -191,14 +202,26 @@ function MapLogicController({
         internalCenterRef.current = L.latLng(center[0], center[1])
       }
     }
-  }, [center, initialZoom, vehicles, searchRadius, map])
+  }, [center, initialZoom, vehicles, searchRadius, map, isLiveTracking])
+
+  // Reset isInitialLoadOrManualSearch, wenn Live-Tracking deaktiviert wird oder eine neue Suche startet
+  useEffect(() => {
+    if (!isLiveTracking) {
+      isInitialLoadOrManualSearch.current = true
+    }
+  }, [isLiveTracking, center])
 
   useMapEvents({
     click: (e) => {
       internalCenterRef.current = e.latlng
       onMapInteraction([e.latlng.lat, e.latlng.lng], "click")
     },
-    // moveend wird nicht mehr für die Suche verwendet
+    // dragstart: () => { // Wenn der Nutzer die Karte manuell bewegt
+    //   if (isLiveTracking) {
+    //     // Hier könnte man das Live-Tracking pausieren oder eine Meldung anzeigen
+    //     // Fürs Erste lassen wir es so, dass die Karte zurückspringt
+    //   }
+    // }
   })
 
   return null
@@ -214,9 +237,10 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   searchRadius,
   showRadius,
   onMapInteraction,
-  isSearchOnMapMoveActive, // Bleibt für Klarheit, wird aber nicht für 'move' genutzt
+  isSearchOnMapMoveActive,
   deviceHeading,
   showCompass,
+  isLiveTracking,
 }) => {
   const blueDotOptions = { color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1 }
   const leafletCenter: LatLngExpression = [center[0], center[1]]
@@ -238,11 +262,13 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   return (
     <MapContainer
       center={leafletCenter}
-      zoom={initialZoom}
-      style={{ height: "100%", width: "100%", touchAction: "auto" }} // touchAction: 'auto' hinzugefügt
+      zoom={initialZoom} // Wird jetzt von der Page-Komponente dynamisch gesetzt
+      style={{ height: "100%", width: "100%", touchAction: "auto" }}
       scrollWheelZoom={true}
-      // Für bessere Touch-Interaktion auf mobilen Geräten, besonders wenn Klicks nicht zuverlässig sind:
-      // tap={true} // Leaflet's tap event, kann helfen, aber zuerst ohne versuchen
+      // Wenn Live-Tracking aktiv ist, könnte man das Ziehen der Karte deaktivieren,
+      // damit sie nicht versehentlich verschoben wird und dann zurückspringt.
+      dragging={!isLiveTracking}
+      // Alternativ: map.setView(center, zoom, {animate: false}) im Live-Tracking für sanftere Übergänge
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -250,10 +276,11 @@ const LeafletMapComponent: React.FC<MapProps> = ({
       />
       <MapLogicController
         center={center}
-        initialZoom={initialZoom}
+        initialZoom={initialZoom} // Wird als Startzoom oder Live-Tracking-Zoom verwendet
         vehicles={vehicles}
         searchRadius={searchRadius}
         onMapInteraction={onMapInteraction}
+        isLiveTracking={isLiveTracking}
       />
       {showRadius && center && (
         <Circle
@@ -273,7 +300,8 @@ const LeafletMapComponent: React.FC<MapProps> = ({
               position={userLeafletLocation}
               icon={createCompassIcon(deviceHeading)}
               ref={compassMarkerRef}
-              keyboard={false} // Verhindert, dass der Marker fokussierbar ist
+              keyboard={false}
+              zIndexOffset={1000} // Sicherstellen, dass der Kompass über dem blauen Punkt ist
             />
           )}
         </>
