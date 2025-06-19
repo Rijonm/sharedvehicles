@@ -35,8 +35,8 @@ const defaultLocations = [
 const FIXED_SEARCH_RADIUS = 400
 const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
 const DEFAULT_MAP_ZOOM_OVERVIEW = 8
-const ACTIVE_SEARCH_INITIAL_ZOOM = 16 // Wird für Live-Tracking ggf. dynamischer
-const LIVE_TRACKING_ZOOM = 17 // Zoomstufe für Live-Tracking
+const ACTIVE_SEARCH_INITIAL_ZOOM = 16
+const LIVE_TRACKING_ZOOM = 17
 
 const VEHICLE_TYPE_API_FILTERS = [
   "ch.bfe.sharedmobility.vehicle_type=E-Scooter",
@@ -57,45 +57,122 @@ export default function Home() {
   const [isHomescreenModalOpen, setIsHomescreenModalOpen] = useState(false)
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null)
   const [showCompass, setShowCompass] = useState(false)
-  const [isLiveTracking, setIsLiveTracking] = useState(false) // Neuer State für Live-Tracking Modus
-  const watchIdRef = useRef<number | null>(null) // Ref für die watchPosition ID
+  const [isLiveTracking, setIsLiveTracking] = useState(false)
+  const watchIdRef = useRef<number | null>(null)
+  const deviceOrientationListenerAttached = useRef(false) // Um doppelte Listener zu vermeiden
 
   const { toast } = useToast()
   const mapContainerRef = useRef<HTMLDivElement>(null)
+
+  const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+    let heading: number | null = null
+    if (event.absolute && typeof event.alpha === "number") {
+      heading = event.alpha
+    } else if (typeof event.webkitCompassHeading === "number") {
+      // Für iOS Safari
+      heading = event.webkitCompassHeading
+    } else if (typeof event.alpha === "number" && !event.absolute) {
+      // Fallback, wenn nicht absolut
+      heading = event.alpha
+    }
+
+    if (heading !== null) {
+      setDeviceHeading((prevHeading) => {
+        if (prevHeading === null || Math.abs(prevHeading - heading!) > 1) {
+          return heading
+        }
+        return prevHeading
+      })
+    }
+  }
+
+  const startDeviceOrientationListener = () => {
+    if (!deviceOrientationListenerAttached.current && window.DeviceOrientationEvent) {
+      // @ts-ignore
+      window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
+      // @ts-ignore
+      window.addEventListener("deviceorientation", handleDeviceOrientation, true)
+      deviceOrientationListenerAttached.current = true
+      console.log("Device orientation listeners attached.")
+    }
+  }
+
+  const stopDeviceOrientationListener = () => {
+    if (deviceOrientationListenerAttached.current && window.DeviceOrientationEvent) {
+      // @ts-ignore
+      window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
+      // @ts-ignore
+      window.removeEventListener("deviceorientation", handleDeviceOrientation, true)
+      deviceOrientationListenerAttached.current = false
+      console.log("Device orientation listeners removed.")
+    }
+    setDeviceHeading(null) // Reset heading
+  }
 
   const stopLiveTracking = () => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current)
       watchIdRef.current = null
+      console.log("Geolocation watch stopped.")
     }
     setIsLiveTracking(false)
     setShowCompass(false)
-    // Optional: userLocationMarker beibehalten oder entfernen? Aktuell wird er nicht entfernt.
+    stopDeviceOrientationListener() // Auch Kompass-Listener stoppen
   }
 
   const handleSetCurrentLocation = () => {
     if (navigator.geolocation && window.isSecureContext) {
       setLoading(true)
-      stopLiveTracking() // Vorheriges Tracking stoppen, falls aktiv
+      stopLiveTracking() // Stoppt vorheriges Tracking und Kompass-Listener
+
+      // Versuche, die Berechtigung für Geräteorientierung anzufordern (indirekt durch Starten der Listener)
+      // Dies ist ein Versuch, da Browser unterschiedliche Sicherheitsmodelle haben.
+      // @ts-ignore
+      if (
+        typeof DeviceOrientationEvent !== "undefined" &&
+        typeof DeviceOrientationEvent.requestPermission === "function"
+      ) {
+        // @ts-ignore
+        DeviceOrientationEvent.requestPermission()
+          .then((permissionState: string) => {
+            if (permissionState === "granted") {
+              startDeviceOrientationListener()
+            } else {
+              toast({
+                title: "Kompass nicht verfügbar",
+                description: "Zugriff auf Geräteausrichtung verweigert.",
+                variant: "destructive",
+              })
+            }
+          })
+          .catch((error: any) => {
+            console.error("Error requesting device orientation permission:", error)
+            // Fallback: Listener ohne explizite Berechtigungsanfrage starten (für Browser, die es nicht benötigen/unterstützen)
+            startDeviceOrientationListener()
+          })
+      } else {
+        // Für Browser, die keine explizite requestPermission API haben
+        startDeviceOrientationListener()
+      }
 
       watchIdRef.current = navigator.geolocation.watchPosition(
         (position) => {
           const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
-          setLocation(currentCoords) // Suchmittelpunkt ist der eigene Standort
-          setUserLocationMarker(currentCoords) // Blauen Punkt setzen/aktualisieren
-          setClickedLocationMarker(null) // Klick-Marker entfernen
+          setLocation(currentCoords)
+          setUserLocationMarker(currentCoords)
+          setClickedLocationMarker(null)
           setLocationName("Ihr Standort (Live)")
-          setShowCompass(true)
-          setIsLiveTracking(true) // Live-Tracking Modus aktivieren
-          setLoading(false) // Ladeindikator entfernen nach erstem erfolgreichen Fix
+          setShowCompass(true) // Kompass-Anzeige aktivieren
 
-          // Nur einmalig eine Toast-Nachricht anzeigen, wenn Live-Tracking startet
           if (!isLiveTracking) {
+            // Nur beim ersten Mal setzen
+            setIsLiveTracking(true)
             toast({
               title: "Live-Standort aktiv",
               description: `Position und Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m) werden laufend aktualisiert.`,
             })
           }
+          setLoading(false)
         },
         (error) => {
           setLoading(false)
@@ -106,7 +183,8 @@ export default function Home() {
           console.log(`Geolocation error (${error.code}): ${error.message}`)
           let description = "Ihr Standort konnte nicht ermittelt werden."
           if (error.code === 1) {
-            description = "Bitte erteilen Sie die Berechtigung, um Ihren Standort zu verwenden."
+            description =
+              "Bitte erteilen Sie die Berechtigung, um Ihren Standort und die Geräteausrichtung zu verwenden."
           }
           toast({
             title: "Standortfehler",
@@ -114,65 +192,25 @@ export default function Home() {
             variant: "destructive",
           })
         },
-        { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 }, // maximumAge: 0 für frischeste Daten
+        { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 },
       )
+      console.log("Geolocation watch started with ID:", watchIdRef.current)
     } else {
       setLoading(false)
       toast({
         title: "Standort nicht verfügbar",
         description:
-          "Die Geolokalisierung wird von Ihrem Browser nicht unterstützt oder Sie befinden sich in einem unsicheren Kontext.",
+          "Die Geolokalisierung wird von Ihrem Browser nicht unterstützt oder Sie befinden sich in einem unsicheren Kontext (HTTPS erforderlich).",
         variant: "destructive",
       })
     }
   }
 
-  // Effekt zum Stoppen des Trackings beim Verlassen der Komponente
   useEffect(() => {
     return () => {
-      stopLiveTracking()
+      stopLiveTracking() // Stellt sicher, dass alles gestoppt wird, wenn die Komponente unmounted wird
     }
   }, [])
-
-  useEffect(() => {
-    const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
-      let heading: number | null = null
-      if (event.absolute && typeof event.alpha === "number") {
-        heading = event.alpha
-      } else if (typeof event.webkitCompassHeading === "number") {
-        heading = event.webkitCompassHeading
-      } else if (typeof event.alpha === "number" && !event.absolute && event.beta !== null && event.gamma !== null) {
-        heading = event.alpha
-      }
-      // Nur aktualisieren, wenn sich der Wert merklich ändert, um unnötige Re-Renders zu vermeiden
-      if (heading !== null) {
-        setDeviceHeading((prevHeading) => {
-          if (prevHeading === null || Math.abs(prevHeading - heading!) > 1) {
-            // Toleranz von 1 Grad
-            return heading
-          }
-          return prevHeading
-        })
-      }
-    }
-
-    if (showCompass && window.DeviceOrientationEvent) {
-      const options = { capture: true }
-      // @ts-ignore
-      window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, options)
-      // @ts-ignore
-      window.addEventListener("deviceorientation", handleDeviceOrientation, options)
-    }
-
-    return () => {
-      if (window.DeviceOrientationEvent) {
-        // @ts-ignore
-        window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
-        // @ts-ignore
-        window.removeEventListener("deviceorientation", handleDeviceOrientation, true)
-      }
-    }
-  }, [showCompass])
 
   async function fetchVehiclesForType(
     filterValue: string,
@@ -205,15 +243,10 @@ export default function Home() {
 
   const fetchSpatialVehicles = async (currentSearchLocation: [number, number]) => {
     if (!currentSearchLocation || !currentSearchLocation[0] || !currentSearchLocation[1]) return
-
-    // Nur laden, wenn nicht bereits ein Ladevorgang für Fahrzeuge aktiv ist (um Überlappung zu vermeiden)
-    // Dies ist eine einfache Sperre, könnte bei Bedarf verfeinert werden.
-    if (loading && !isLiveTracking) return // Bei Live-Tracking darf 'loading' kurz sein für die Fahrzeugsuche
+    if (loading && !isLiveTracking) return
 
     setLoading(true)
     setApiError(null)
-    // Fahrzeuge nicht sofort leeren, wenn Live-Tracking aktiv ist, um Flackern zu vermeiden
-    // setVehicles([])
 
     try {
       const vehiclePromises = VEHICLE_TYPE_API_FILTERS.map((filter) =>
@@ -228,11 +261,10 @@ export default function Home() {
         }
       })
       const finalVehicles = Array.from(uniqueVehiclesMap.values())
-      setVehicles(finalVehicles) // Fahrzeuge aktualisieren
+      setVehicles(finalVehicles)
       setLastUpdated(new Date())
 
       if (!isLiveTracking) {
-        // Toast nur, wenn kein Live-Tracking aktiv ist oder initial
         if (finalVehicles.length === 0) {
           toast({
             title: "Keine Fahrzeuge gefunden",
@@ -262,28 +294,26 @@ export default function Home() {
     }
   }
 
-  // useEffect für die Fahrzeugsuche, wenn sich 'location' ändert
   useEffect(() => {
     if (location) {
       fetchSpatialVehicles(location)
-      // Scroll zur Karte nur, wenn kein Live-Tracking aktiv ist, um Springen zu vermeiden
       if (!isLiveTracking && mapContainerRef.current) {
         mapContainerRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
       }
     } else {
       setVehicles([])
-      setLoading(false) // Sicherstellen, dass Loading auf false ist, wenn kein Standort
+      setLoading(false)
     }
-  }, [location]) // Abhängigkeit von 'location'
+  }, [location])
 
   const handleVehicleSelect = (vehicle: MobilityVehicle) => {
     setSelectedVehicle(vehicle)
   }
 
   const handleLocationSearch = (newLocation: [number, number], name: string) => {
-    stopLiveTracking() // Live-Tracking stoppen, wenn manuell gesucht wird
-    setLoading(true) // Loading für die neue Suche setzen
-    setLocation(newLocation) // Dies löst den useEffect für fetchSpatialVehicles aus
+    stopLiveTracking()
+    setLoading(true)
+    setLocation(newLocation)
     setLocationName(name)
     setUserLocationMarker(null)
     setClickedLocationMarker(newLocation)
@@ -295,12 +325,12 @@ export default function Home() {
     setLocation(locationData.coords)
     setLocationName(locationData.name)
     setUserLocationMarker(null)
-    setClickedLocationMarker(null) // Bei Default-Locations keinen Klick-Marker
+    setClickedLocationMarker(null)
   }
 
   const refreshData = () => {
     if (location) {
-      fetchSpatialVehicles(location) // Explizit mit der aktuellen Location
+      fetchSpatialVehicles(location)
     } else {
       toast({
         title: "Kein Standort ausgewählt",
@@ -314,7 +344,7 @@ export default function Home() {
     stopLiveTracking()
     setApiError(null)
     setLoading(true)
-    setLocation(null) // Kein aktiver Standort für Mock-Daten
+    setLocation(null)
     setLocationName("Demo Daten")
     setUserLocationMarker(null)
     setClickedLocationMarker(null)
@@ -339,14 +369,16 @@ export default function Home() {
   const handleMapInteractionSearch = (newCenter: [number, number], type: "move" | "click") => {
     if (type === "click" && selectedVehicle) {
       setSelectedVehicle(null)
+      console.log("Vehicle details closed by map click.")
       return
     }
     if (type === "click") {
-      stopLiveTracking() // Live-Tracking stoppen bei Klick auf Karte
+      console.log("Map clicked for new location search at:", newCenter)
+      stopLiveTracking()
       setClickedLocationMarker(newCenter)
       setUserLocationMarker(null)
       setLocationName("Ausgewählter Punkt")
-      setLocation(newCenter) // Dies löst den useEffect für fetchSpatialVehicles aus
+      setLocation(newCenter)
     }
   }
 
@@ -379,7 +411,7 @@ export default function Home() {
               size="sm"
               onClick={refreshData}
               className="hidden sm:flex items-center gap-1 ml-2"
-              disabled={loading && !isLiveTracking} // Deaktivieren während normalem Laden
+              disabled={loading && !isLiveTracking}
             >
               <RefreshCw className="h-4 w-4" />
               Aktualisieren
@@ -439,30 +471,28 @@ export default function Home() {
 
           <div className="md:col-span-3">
             <div className="rounded-lg overflow-hidden border h-[70vh] relative" ref={mapContainerRef}>
-              {locationName &&
-                !loading && ( // Badge-Anzeige auch während Live-Loading der Fahrzeuge
-                  <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium flex items-center">
-                    {clickedLocationMarker && <MapPin className="h-4 w-4 mr-1.5 text-red-500" />}
-                    {userLocationMarker && <Compass className="h-4 w-4 mr-1.5 text-blue-500" />}
-                    {!userLocationMarker && !clickedLocationMarker && location && (
-                      <MapPin className="h-4 w-4 mr-1.5 text-gray-500" />
-                    )}
-                    {`${locationName} • ${FIXED_SEARCH_RADIUS}m Radius`}
-                    <Badge variant="secondary" className="ml-2">
-                      {vehicles.length} Fahrzeuge
-                    </Badge>
-                  </div>
-                )}
-              {loading &&
-                !isLiveTracking && ( // Ladeanzeige nur, wenn KEIN Live-Tracking aktiv ist (da Fahrzeuge im Hintergrund laden)
-                  <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                    <span className="ml-2">Fahrzeuge werden geladen...</span>
-                  </div>
-                )}
+              {locationName && !loading && (
+                <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium flex items-center">
+                  {clickedLocationMarker && <MapPin className="h-4 w-4 mr-1.5 text-red-500" />}
+                  {userLocationMarker && <Compass className="h-4 w-4 mr-1.5 text-blue-500" />}
+                  {!userLocationMarker && !clickedLocationMarker && location && (
+                    <MapPin className="h-4 w-4 mr-1.5 text-gray-500" />
+                  )}
+                  {`${locationName} • ${FIXED_SEARCH_RADIUS}m Radius`}
+                  <Badge variant="secondary" className="ml-2">
+                    {vehicles.length} Fahrzeuge
+                  </Badge>
+                </div>
+              )}
+              {loading && !isLiveTracking && (
+                <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                  <span className="ml-2">Fahrzeuge werden geladen...</span>
+                </div>
+              )}
               <LeafletMap
                 center={location || DEFAULT_MAP_CENTER}
-                initialZoom={currentMapZoom} // Dynamischer Zoom basierend auf Live-Tracking
+                initialZoom={currentMapZoom}
                 vehicles={vehicles}
                 onVehicleSelect={handleVehicleSelect}
                 searchRadius={FIXED_SEARCH_RADIUS}
@@ -473,7 +503,7 @@ export default function Home() {
                 isSearchOnMapMoveActive={false}
                 deviceHeading={deviceHeading}
                 showCompass={showCompass}
-                isLiveTracking={isLiveTracking} // Map mitteilen, ob Live-Tracking aktiv ist
+                isLiveTracking={isLiveTracking}
               />
             </div>
 
