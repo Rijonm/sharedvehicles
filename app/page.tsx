@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
-import { Loader2, AlertCircle, RefreshCw, Info } from "lucide-react"
+import { Loader2, AlertCircle, RefreshCw, Info, MapPin } from "lucide-react" // MapPin hinzugefügt
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -25,7 +25,6 @@ const LeafletMap = dynamic(() => import("@/components/map"), {
   ),
 })
 
-// Updated default locations with precise SBB train station coordinates
 const defaultLocations = [
   { name: "Zürich SBB", coords: [47.3779, 8.5402] as [number, number] },
   { name: "Genf SBB", coords: [46.2108, 6.1426] as [number, number] },
@@ -33,12 +32,11 @@ const defaultLocations = [
   { name: "Bern SBB", coords: [46.9498, 7.4391] as [number, number] },
 ]
 
-const FIXED_SEARCH_RADIUS = 400 // Search radius set to 400m
-const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275] // Approx. center of Switzerland
+const FIXED_SEARCH_RADIUS = 400
+const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
 const DEFAULT_MAP_ZOOM_OVERVIEW = 8
-const ACTIVE_SEARCH_INITIAL_ZOOM = 16 // Zoom level for active search (400m radius)
+const ACTIVE_SEARCH_INITIAL_ZOOM = 16
 
-// Updated vehicle type filters based on user input
 const VEHICLE_TYPE_API_FILTERS = [
   "ch.bfe.sharedmobility.vehicle_type=E-Scooter",
   "ch.bfe.sharedmobility.vehicle_type=E-Bike",
@@ -49,12 +47,14 @@ export default function Home() {
   const [vehicles, setVehicles] = useState<MobilityVehicle[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<MobilityVehicle | null>(null)
-  const [location, setLocation] = useState<[number, number] | null>(null)
-  const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null)
+  const [location, setLocation] = useState<[number, number] | null>(null) // Suchmittelpunkt
+  const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null) // Blauer Punkt für "Mein Standort"
+  const [clickedLocationMarker, setClickedLocationMarker] = useState<[number, number] | null>(null) // Roter Pin für Klick-Suche
   const [locationName, setLocationName] = useState<string>("")
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isHomescreenModalOpen, setIsHomescreenModalOpen] = useState(false)
+  // - const [searchOnMapMove, setSearchOnMapMove] = useState(false)
 
   const { toast } = useToast()
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -65,12 +65,14 @@ export default function Home() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
-          setLocation(currentCoords)
-          setUserLocationMarker(currentCoords)
+          setLocation(currentCoords) // Suchmittelpunkt ist der eigene Standort
+          setUserLocationMarker(currentCoords) // Blauen Punkt setzen
+          setClickedLocationMarker(null) // Klick-Marker entfernen
           setLocationName("Ihr Standort")
+          // - setSearchOnMapMove(true)
           toast({
             title: "Standort aktualisiert",
-            description: `Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m) werden gesucht.`,
+            description: `Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m werden gesucht.`,
           })
         },
         (error) => {
@@ -211,6 +213,8 @@ export default function Home() {
     setLocation(newLocation)
     setLocationName(name)
     setUserLocationMarker(null)
+    setClickedLocationMarker(newLocation)
+    // - setSearchOnMapMove(true)
   }
 
   const handleDefaultLocationSelect = (locationData: { name: string; coords: [number, number] }) => {
@@ -218,6 +222,7 @@ export default function Home() {
     setLocation(locationData.coords)
     setLocationName(locationData.name)
     setUserLocationMarker(null)
+    setClickedLocationMarker(null)
   }
 
   const refreshData = () => {
@@ -238,6 +243,7 @@ export default function Home() {
     setLocation(null)
     setLocationName("Demo Daten")
     setUserLocationMarker(null)
+    setClickedLocationMarker(null)
     import("@/mock/mobility-data").then((module) => {
       const allMockVehicles = module.default
       const uniqueVehiclesMap = new Map<string, MobilityVehicle>()
@@ -253,7 +259,19 @@ export default function Home() {
         description: "Umgewechselt auf Demo-Modus mit Beispielfahrzeugen aller Typen.",
       })
       setLoading(false)
+      // - setSearchOnMapMove(true)
     })
+  }
+
+  const handleMapInteractionSearch = (newCenter: [number, number], type: "move" | "click") => {
+    if (type === "click") {
+      setClickedLocationMarker(newCenter) // Roten Pin für Klick setzen
+      setUserLocationMarker(null) // Blauen "Mein Standort"-Pin entfernen
+      setLocationName("Ausgewählter Punkt")
+      setLocation(newCenter) // Suchmittelpunkt aktualisieren und Suche auslösen (via useEffect)
+    }
+    // Der "move"-Fall wird nicht mehr behandelt, um eine Suche auszulösen.
+    // Die Karte kann weiterhin bewegt werden, aber es erfolgt keine automatische neue Abfrage.
   }
 
   return (
@@ -334,7 +352,12 @@ export default function Home() {
           <div className="md:col-span-3">
             <div className="rounded-lg overflow-hidden border h-[70vh] relative" ref={mapContainerRef}>
               {locationName && !loading && (
-                <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium">
+                <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium flex items-center">
+                  {clickedLocationMarker && <MapPin className="h-4 w-4 mr-1.5 text-red-500" />}
+                  {userLocationMarker && <MapPin className="h-4 w-4 mr-1.5 text-blue-500" />}
+                  {!userLocationMarker && !clickedLocationMarker && location && (
+                    <MapPin className="h-4 w-4 mr-1.5 text-gray-500" />
+                  )}
                   {`${locationName} • ${FIXED_SEARCH_RADIUS}m Radius`}
                   <Badge variant="secondary" className="ml-2">
                     {vehicles.length} Fahrzeuge
@@ -352,9 +375,12 @@ export default function Home() {
                 initialZoom={location ? ACTIVE_SEARCH_INITIAL_ZOOM : DEFAULT_MAP_ZOOM_OVERVIEW}
                 vehicles={vehicles}
                 onVehicleSelect={handleVehicleSelect}
-                searchRadius={location ? FIXED_SEARCH_RADIUS : 50000}
-                userLocation={userLocationMarker}
+                searchRadius={FIXED_SEARCH_RADIUS} // Immer den festen Radius verwenden
+                userLocation={userLocationMarker} // Für den blauen Punkt
+                clickedLocation={clickedLocationMarker} // Für den roten Pin
                 showRadius={!!location}
+                onMapInteraction={handleMapInteractionSearch}
+                isSearchOnMapMoveActive={false}
               />
             </div>
 
