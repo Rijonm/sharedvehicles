@@ -8,7 +8,7 @@ import "leaflet/dist/leaflet.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone } from "lucide-react" // Users icon removed
+import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone } from "lucide-react"
 import Link from "next/link"
 
 interface MapProps {
@@ -21,34 +21,84 @@ interface MapProps {
   showRadius: boolean
 }
 
-// Leaflet Marker Icons
-const defaultIcon = new L.Icon({
-  iconUrl: "/default-marker.svg",
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-})
+const providerColors: Record<string, { primary: string; background: string }> = {
+  // E-Scooter
+  "Bolt Technology OÜ": { primary: "#34D186", background: "#ECFDF5" }, // Grün
+  "Voi Technology AB": { primary: "#F46D5B", background: "#FEF2F2" }, // Korallenrot
+  "bird basel": { primary: "#33BBFF", background: "#EFF6FF" }, // Hellblau
+  Lime: { primary: "#00C851", background: "#ECFDF5" }, // Limetten-Grün
+  "Lime City partners from Partners::RegionFeedMediator": { primary: "#00C851", background: "#ECFDF5" }, // Limetten-Grün
+  // Bikes
+  PubliBike: { primary: "#E53935", background: "#FEF2F2" }, // Rot
+  nextbike: { primary: "#4CAF50", background: "#ECFDF5" }, // Grün
+  "donkey republic": { primary: "#FF9800", background: "#FFF7ED" }, // Orange
+  Velospot: { primary: "#8B5CF6", background: "#F5F3FF" }, // Violett (Purple)
+  // Cars
+  Mobility: { primary: "#E53935", background: "#FEF2F2" }, // Rot
+  "SHARE NOW": { primary: "#2196F3", background: "#EFF6FF" }, // Blau
+  Ubeeqo: { primary: "#9C27B0", background: "#FAF5FF" }, // Lila
+  // Fallback für unbekannte Anbieter
+  default: { primary: "#6B7280", background: "#F3F4F6" }, // Grau
+}
 
-const bikeIcon = new L.Icon({
-  iconUrl: "/bike-marker.svg",
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-})
+function createCustomMarker(vehicleType: string, providerName: string): L.DivIcon {
+  const colors = providerColors[providerName] || providerColors.default
+  let iconUrl = ""
+  let iconViewBox = "0 0 24 24" // Default viewBox
 
-const carIcon = new L.Icon({
-  iconUrl: "/car-marker.svg",
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-})
+  switch (vehicleType.toLowerCase()) {
+    case "bicycle":
+    case "bike":
+    case "e-bike":
+      iconUrl = "/icon-bike.svg"
+      iconViewBox = "0 -3 38 38" // Specific viewBox for bike
+      break
+    case "scooter":
+    case "e-scooter":
+    case "moped":
+      iconUrl = "/icon-scooter.svg"
+      iconViewBox = "0 0 24 24" // Specific viewBox for scooter
+      break
+    case "car":
+      iconUrl = "/icon-car.svg"
+      iconViewBox = "0 0 24 24" // Specific viewBox for car
+      break
+    default:
+      // Fallback to a simple circle if no specific icon
+      const fallbackHtml = `
+        <div style="background-color: ${colors.primary}; border: 2px solid ${colors.background}; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+        </div>
+      `
+      return L.divIcon({
+        html: fallbackHtml,
+        className: "custom-vehicle-marker",
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        popupAnchor: [0, -12],
+      })
+  }
 
-const scooterIcon = new L.Icon({
-  iconUrl: "/scooter-marker.svg",
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -32],
-})
+  const html = `
+    <div style="background-color: ${colors.background}; border: 2px solid ${colors.primary}; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+      <img src="${iconUrl}" alt="${vehicleType}" style="width: 20px; height: 20px; fill: ${colors.primary}; stroke: ${colors.primary};" />
+    </div>
+  `
+  // Note: For SVGs to be colored by `fill` or `stroke` CSS properties,
+  // the SVG itself must be designed to inherit these (e.g., using `currentColor`).
+  // If the provided SVGs have hardcoded colors, this `fill` and `stroke` in style might not work as expected.
+  // We are using the img tag, so the fill/stroke will come from the SVG file itself.
+  // To dynamically color them, we would need to inline the SVG content or use CSS masks.
+  // For simplicity with external SVGs, we'll rely on their inherent colors or use them as a single color defined by the `fill` in the SVG file.
+  // The `fill` and `stroke` in the style attribute for the img tag are more of a hint and might not override internal SVG styles.
+
+  return L.divIcon({
+    html: html,
+    className: "custom-vehicle-marker",
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -18],
+  })
+}
 
 const providerPricing: Record<string, { unlockFee: string; perMinuteRate: string }> = {
   "Bolt Technology OÜ": { unlockFee: "0.50 CHF", perMinuteRate: "0.49 CHF" },
@@ -56,23 +106,6 @@ const providerPricing: Record<string, { unlockFee: string; perMinuteRate: string
   "bird basel": { unlockFee: "1 CHF", perMinuteRate: "0.45 CHF" },
   "Lime City partners from Partners::RegionFeedMediator": { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" },
   Lime: { unlockFee: "1 CHF", perMinuteRate: "0.46 CHF" },
-}
-
-const getLeafletVehicleIcon = (vehicleType: string) => {
-  switch (vehicleType?.toLowerCase()) {
-    case "bicycle":
-    case "bike":
-    case "e-bike":
-      return bikeIcon
-    case "car":
-      return carIcon
-    case "scooter":
-    case "e-scooter":
-    case "moped":
-      return scooterIcon
-    default:
-      return defaultIcon
-  }
 }
 
 const getReactVehicleIcon = (vehicleType: string, className?: string) => {
@@ -86,11 +119,9 @@ const getReactVehicleIcon = (vehicleType: string, className?: string) => {
     case "scooter":
     case "e-scooter":
     case "moped":
-      // Using Smartphone icon as a placeholder for scooters/mopeds if no specific icon is available
-      // You might want to add a specific Scooter icon from lucide-react if one exists or use a generic one
       return <Smartphone className={className || "h-5 w-5"} />
     default:
-      return null // Or a generic placeholder icon
+      return null
   }
 }
 
@@ -157,7 +188,6 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   const blueDotOptions = { color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1 }
   const leafletCenter: LatLngExpression = [center[0], center[1]]
   const userLeafletLocation: LatLngExpression | null = userLocation ? [userLocation[0], userLocation[1]] : null
-
   const autoPanPaddingValue: PointExpression = [10, 55]
 
   return (
@@ -192,13 +222,10 @@ const LeafletMapComponent: React.FC<MapProps> = ({
           const { provider, station, vehicle_type, available } = properties
           const pricing = providerPricing[provider.name] || providerPricing[provider.name.split(" ")[0]]
           const appStoreLink = provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.store_uri?.[0]
+          const customIcon = createCustomMarker(vehicle_type, provider.name)
 
           return (
-            <Marker
-              key={vehicle.id}
-              position={vehiclePosition}
-              icon={getLeafletVehicleIcon(vehicle.properties.vehicle_type)}
-            >
+            <Marker key={vehicle.id} position={vehiclePosition} icon={customIcon}>
               <Popup minWidth={280} autoPanPaddingTopLeft={autoPanPaddingValue} autoPanPaddingBottomRight={[10, 10]}>
                 <div className="p-1 space-y-2 text-xs">
                   <div className="flex items-center gap-2">
@@ -229,7 +256,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
                       {station.address && <p className="text-xs text-gray-500">{station.address}</p>}
                       {station.status && typeof station.status.num_vehicle_available === "number" && (
                         <p className="text-xs text-gray-500 flex items-center gap-1">
-                          {getReactVehicleIcon(vehicle_type, "h-3 w-3 mr-0.5")} {/* Dynamisches Icon hier */}
+                          {getReactVehicleIcon(vehicle_type, "h-3 w-3 mr-0.5")}
                           {station.status.num_vehicle_available} Fahrzeuge verfügbar
                         </p>
                       )}
