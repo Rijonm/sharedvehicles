@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { MapPin, Search, LocateFixed, RadioTower } from "lucide-react" // RadioTower für Live-Tracking
+import { MapPin, Search, LocateFixed } from "lucide-react" // RadioTower entfernt
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
@@ -9,9 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface MobilityFiltersProps {
   onLocationSearch: (location: [number, number], name: string) => void
-  onSetCurrentLocation: () => void // Wird jetzt für Live-Tracking genutzt
+  onSetCurrentLocation: () => void
   defaultLocations: { name: string; coords: [number, number] }[]
-  isLiveTrackingActive: boolean // Neuer Prop
+  isUserLocationActive: boolean // Neuer Prop, um den Zustand des "Mein Standort"-Buttons zu steuern
 }
 
 interface Suggestion {
@@ -27,7 +27,7 @@ export default function MobilityFilters({
   onLocationSearch,
   onSetCurrentLocation,
   defaultLocations,
-  isLiveTrackingActive,
+  isUserLocationActive,
 }: MobilityFiltersProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -98,9 +98,9 @@ export default function MobilityFilters({
       if (data.results && data.results.length > 0) {
         const { lat, lon, label } = data.results[0].attrs
         const displayName = stripHtml(label)
-        setSearchQuery(displayName) // Suchfeld mit dem gefundenen Namen aktualisieren
+        setSearchQuery(displayName)
         setIsSuggestionsVisible(false)
-        onLocationSearch([lat, lon], displayName) // Hier wird die Suche ausgelöst
+        onLocationSearch([lat, lon], displayName)
         toast({
           title: "Standort aktualisiert",
           description: `Zeige Ergebnisse in der Nähe von ${displayName}`,
@@ -125,9 +125,9 @@ export default function MobilityFilters({
   const handleSuggestionClick = (suggestion: Suggestion) => {
     const { lat, lon, label } = suggestion.attrs
     const displayName = stripHtml(label)
-    setSearchQuery(displayName) // Suchfeld mit dem ausgewählten Namen aktualisieren
+    setSearchQuery(displayName)
     setIsSuggestionsVisible(false)
-    onLocationSearch([lat, lon], displayName) // Hier wird die Suche ausgelöst
+    onLocationSearch([lat, lon], displayName)
     toast({
       title: "Standort aktualisiert",
       description: `Zeige Ergebnisse in der Nähe von ${displayName}`,
@@ -175,15 +175,11 @@ export default function MobilityFilters({
 
         <Button
           onClick={onSetCurrentLocation}
-          variant={isLiveTrackingActive ? "default" : "outline"} // Button-Variante basierend auf Live-Tracking-Status
+          variant={isUserLocationActive ? "default" : "outline"} // Button-Variante basierend auf aktivem Nutzerstandort
           className="w-full mt-2 flex items-center gap-2"
         >
-          {isLiveTrackingActive ? (
-            <RadioTower className="h-4 w-4 animate-pulse" />
-          ) : (
-            <LocateFixed className="h-4 w-4" />
-          )}
-          {isLiveTrackingActive ? "Live-Standort aktiv" : "Mein Standort"}
+          <LocateFixed className={`h-4 w-4 ${isUserLocationActive ? "text-white" : ""}`} />
+          {isUserLocationActive ? "Mein Standort aktiv" : "Mein Standort"}
         </Button>
 
         <Card className="mt-4">
@@ -201,7 +197,7 @@ export default function MobilityFilters({
                   size="sm"
                   className="w-full justify-start text-xs px-2 py-1 h-auto"
                   onClick={() => {
-                    setSearchQuery(location.name) // Setzt den Namen des Ortes ins Suchfeld
+                    // setSearchQuery(location.name) // Entfernt: Suchfeld nicht mehr befüllen
                     onLocationSearch(location.coords, location.name)
                   }}
                 >

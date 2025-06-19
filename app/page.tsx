@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
-import { Loader2, AlertCircle, RefreshCw, Info, MapPin, Compass } from "lucide-react"
+import { Loader2, AlertCircle, RefreshCw, Info, MapPin, LocateFixed } from "lucide-react" // LocateFixed importiert
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -35,8 +35,7 @@ const defaultLocations = [
 const FIXED_SEARCH_RADIUS = 400
 const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
 const DEFAULT_MAP_ZOOM_OVERVIEW = 8
-const ACTIVE_SEARCH_INITIAL_ZOOM = 16
-const LIVE_TRACKING_ZOOM = 17
+const ACTIVE_SEARCH_ZOOM = 16 // Zoomstufe für aktive Suche (eigener Standort oder gewählter Ort)
 
 const VEHICLE_TYPE_API_FILTERS = [
   "ch.bfe.sharedmobility.vehicle_type=E-Scooter",
@@ -48,18 +47,16 @@ export default function Home() {
   const [vehicles, setVehicles] = useState<MobilityVehicle[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<MobilityVehicle | null>(null)
-  const [location, setLocation] = useState<[number, number] | null>(null)
-  const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null)
+  const [location, setLocation] = useState<[number, number] | null>(null) // Aktueller Suchmittelpunkt
+  const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null) // Position des blauen Punkts
   const [clickedLocationMarker, setClickedLocationMarker] = useState<[number, number] | null>(null)
   const [locationName, setLocationName] = useState<string>("")
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isHomescreenModalOpen, setIsHomescreenModalOpen] = useState(false)
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null)
-  const [showCompass, setShowCompass] = useState(false)
-  const [isLiveTracking, setIsLiveTracking] = useState(false)
-  const watchIdRef = useRef<number | null>(null)
-  const deviceOrientationListenerAttached = useRef(false) // Um doppelte Listener zu vermeiden
+  const [showCompass, setShowCompass] = useState(false) // Steuert Sichtbarkeit des Kompass-Markers
+  const deviceOrientationListenerAttached = useRef(false)
 
   const { toast } = useToast()
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -69,10 +66,8 @@ export default function Home() {
     if (event.absolute && typeof event.alpha === "number") {
       heading = event.alpha
     } else if (typeof event.webkitCompassHeading === "number") {
-      // Für iOS Safari
       heading = event.webkitCompassHeading
     } else if (typeof event.alpha === "number" && !event.absolute) {
-      // Fallback, wenn nicht absolut
       heading = event.alpha
     }
 
@@ -89,11 +84,44 @@ export default function Home() {
   const startDeviceOrientationListener = () => {
     if (!deviceOrientationListenerAttached.current && window.DeviceOrientationEvent) {
       // @ts-ignore
-      window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
-      // @ts-ignore
-      window.addEventListener("deviceorientation", handleDeviceOrientation, true)
-      deviceOrientationListenerAttached.current = true
-      console.log("Device orientation listeners attached.")
+      if (typeof DeviceOrientationEvent.requestPermission === "function") {
+        // @ts-ignore
+        DeviceOrientationEvent.requestPermission()
+          .then((permissionState: string) => {
+            if (permissionState === "granted") {
+              // @ts-ignore
+              window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
+              // @ts-ignore
+              window.addEventListener("deviceorientation", handleDeviceOrientation, true)
+              deviceOrientationListenerAttached.current = true
+              console.log("Device orientation listeners attached after permission grant.")
+            } else {
+              toast({
+                title: "Kompass nicht verfügbar",
+                description: "Zugriff auf Geräteausrichtung verweigert.",
+                variant: "default", // Weniger aufdringlich als destructive
+              })
+            }
+          })
+          .catch((error: any) => {
+            console.error("Error requesting device orientation permission:", error)
+            // Fallback für Browser ohne requestPermission oder bei Fehler
+            // @ts-ignore
+            window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
+            // @ts-ignore
+            window.addEventListener("deviceorientation", handleDeviceOrientation, true)
+            deviceOrientationListenerAttached.current = true
+            console.log("Device orientation listeners attached (fallback).")
+          })
+      } else {
+        // Für Browser, die keine explizite requestPermission API haben
+        // @ts-ignore
+        window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
+        // @ts-ignore
+        window.addEventListener("deviceorientation", handleDeviceOrientation, true)
+        deviceOrientationListenerAttached.current = true
+        console.log("Device orientation listeners attached (no requestPermission API).")
+      }
     }
   }
 
@@ -106,80 +134,40 @@ export default function Home() {
       deviceOrientationListenerAttached.current = false
       console.log("Device orientation listeners removed.")
     }
-    setDeviceHeading(null) // Reset heading
+    setDeviceHeading(null)
+    setShowCompass(false)
   }
 
-  const stopLiveTracking = () => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current)
-      watchIdRef.current = null
-      console.log("Geolocation watch stopped.")
-    }
-    setIsLiveTracking(false)
-    setShowCompass(false)
-    stopDeviceOrientationListener() // Auch Kompass-Listener stoppen
+  const clearUserLocationStateAndCompass = () => {
+    setUserLocationMarker(null) // Blauen Punkt entfernen
+    stopDeviceOrientationListener() // Kompass stoppen und ausblenden
   }
 
   const handleSetCurrentLocation = () => {
     if (navigator.geolocation && window.isSecureContext) {
       setLoading(true)
-      stopLiveTracking() // Stoppt vorheriges Tracking und Kompass-Listener
+      clearUserLocationStateAndCompass() // Vorherigen Zustand ggf. zurücksetzen
 
-      // Versuche, die Berechtigung für Geräteorientierung anzufordern (indirekt durch Starten der Listener)
-      // Dies ist ein Versuch, da Browser unterschiedliche Sicherheitsmodelle haben.
-      // @ts-ignore
-      if (
-        typeof DeviceOrientationEvent !== "undefined" &&
-        typeof DeviceOrientationEvent.requestPermission === "function"
-      ) {
-        // @ts-ignore
-        DeviceOrientationEvent.requestPermission()
-          .then((permissionState: string) => {
-            if (permissionState === "granted") {
-              startDeviceOrientationListener()
-            } else {
-              toast({
-                title: "Kompass nicht verfügbar",
-                description: "Zugriff auf Geräteausrichtung verweigert.",
-                variant: "destructive",
-              })
-            }
-          })
-          .catch((error: any) => {
-            console.error("Error requesting device orientation permission:", error)
-            // Fallback: Listener ohne explizite Berechtigungsanfrage starten (für Browser, die es nicht benötigen/unterstützen)
-            startDeviceOrientationListener()
-          })
-      } else {
-        // Für Browser, die keine explizite requestPermission API haben
-        startDeviceOrientationListener()
-      }
-
-      watchIdRef.current = navigator.geolocation.watchPosition(
+      navigator.geolocation.getCurrentPosition(
         (position) => {
           const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
-          setLocation(currentCoords)
-          setUserLocationMarker(currentCoords)
-          setClickedLocationMarker(null)
-          setLocationName("Ihr Standort (Live)")
-          setShowCompass(true) // Kompass-Anzeige aktivieren
+          setLocation(currentCoords) // Suchmittelpunkt setzen -> löst fetchSpatialVehicles aus
+          setUserLocationMarker(currentCoords) // Blauen Punkt setzen
+          setClickedLocationMarker(null) // Klick-Marker entfernen
+          setLocationName("Mein Standort")
 
-          if (!isLiveTracking) {
-            // Nur beim ersten Mal setzen
-            setIsLiveTracking(true)
-            toast({
-              title: "Live-Standort aktiv",
-              description: `Position und Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m) werden laufend aktualisiert.`,
-            })
-          }
+          startDeviceOrientationListener() // Kompass-Listener starten
+          setShowCompass(true) // Kompass-Anzeige auf Karte aktivieren
+
           setLoading(false)
+          toast({
+            title: "Standort ermittelt",
+            description: `Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m) werden geladen.`,
+          })
         },
         (error) => {
           setLoading(false)
-          stopLiveTracking()
-          setUserLocationMarker(null)
-          setLocation(null)
-          setLocationName("")
+          clearUserLocationStateAndCompass()
           console.log(`Geolocation error (${error.code}): ${error.message}`)
           let description = "Ihr Standort konnte nicht ermittelt werden."
           if (error.code === 1) {
@@ -192,9 +180,8 @@ export default function Home() {
             variant: "destructive",
           })
         },
-        { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 },
+        { timeout: 10000, enableHighAccuracy: true },
       )
-      console.log("Geolocation watch started with ID:", watchIdRef.current)
     } else {
       setLoading(false)
       toast({
@@ -206,9 +193,10 @@ export default function Home() {
     }
   }
 
+  // Cleanup für Kompass-Listener, wenn Komponente unmounted wird
   useEffect(() => {
     return () => {
-      stopLiveTracking() // Stellt sicher, dass alles gestoppt wird, wenn die Komponente unmounted wird
+      stopDeviceOrientationListener()
     }
   }, [])
 
@@ -243,10 +231,11 @@ export default function Home() {
 
   const fetchSpatialVehicles = async (currentSearchLocation: [number, number]) => {
     if (!currentSearchLocation || !currentSearchLocation[0] || !currentSearchLocation[1]) return
-    if (loading && !isLiveTracking) return
 
     setLoading(true)
     setApiError(null)
+    // Fahrzeuge nicht sofort leeren, um Flackern zu vermeiden, wenn nur aktualisiert wird
+    // setVehicles([])
 
     try {
       const vehiclePromises = VEHICLE_TYPE_API_FILTERS.map((filter) =>
@@ -264,31 +253,27 @@ export default function Home() {
       setVehicles(finalVehicles)
       setLastUpdated(new Date())
 
-      if (!isLiveTracking) {
-        if (finalVehicles.length === 0) {
-          toast({
-            title: "Keine Fahrzeuge gefunden",
-            description: `Im Umkreis von ${FIXED_SEARCH_RADIUS}m wurden keine Fahrzeuge für die gewählten Typen gefunden.`,
-          })
-        } else {
-          toast({
-            title: "Fahrzeuge geladen",
-            description: `${finalVehicles.length} Fahrzeuge (kombinierte Typen) innerhalb von ${FIXED_SEARCH_RADIUS}m gefunden`,
-          })
-        }
+      if (finalVehicles.length === 0) {
+        toast({
+          title: "Keine Fahrzeuge gefunden",
+          description: `Im Umkreis von ${FIXED_SEARCH_RADIUS}m wurden keine Fahrzeuge für die gewählten Typen gefunden.`,
+        })
+      } else {
+        toast({
+          title: "Fahrzeuge geladen",
+          description: `${finalVehicles.length} Fahrzeuge (kombinierte Typen) innerhalb von ${FIXED_SEARCH_RADIUS}m gefunden`,
+        })
       }
     } catch (error) {
       console.error("Error fetching spatial vehicles (Promise.all level):", error)
       const message = error instanceof Error ? error.message : "Ein unbekannter Fehler ist aufgetreten."
       setApiError(message)
       setVehicles([])
-      if (!isLiveTracking) {
-        toast({
-          title: "Fehler beim Laden der Fahrzeuge",
-          description: message,
-          variant: "destructive",
-        })
-      }
+      toast({
+        title: "Fehler beim Laden der Fahrzeuge",
+        description: message,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -297,35 +282,33 @@ export default function Home() {
   useEffect(() => {
     if (location) {
       fetchSpatialVehicles(location)
-      if (!isLiveTracking && mapContainerRef.current) {
+      if (mapContainerRef.current) {
         mapContainerRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
       }
     } else {
-      setVehicles([])
+      setVehicles([]) // Leere Fahrzeuge, wenn kein Standort (z.B. initial)
       setLoading(false)
     }
-  }, [location])
+  }, [location]) // Abhängigkeit nur von 'location'
 
   const handleVehicleSelect = (vehicle: MobilityVehicle) => {
     setSelectedVehicle(vehicle)
   }
 
   const handleLocationSearch = (newLocation: [number, number], name: string) => {
-    stopLiveTracking()
+    clearUserLocationStateAndCompass() // Kompass und blauen Punkt entfernen
     setLoading(true)
-    setLocation(newLocation)
+    setLocation(newLocation) // Dies löst den useEffect für fetchSpatialVehicles aus
     setLocationName(name)
-    setUserLocationMarker(null)
-    setClickedLocationMarker(newLocation)
+    setClickedLocationMarker(newLocation) // Klick-Marker für gesuchten Ort setzen
   }
 
   const handleDefaultLocationSelect = (locationData: { name: string; coords: [number, number] }) => {
-    stopLiveTracking()
+    clearUserLocationStateAndCompass() // Kompass und blauen Punkt entfernen
     setLoading(true)
     setLocation(locationData.coords)
     setLocationName(locationData.name)
-    setUserLocationMarker(null)
-    setClickedLocationMarker(null)
+    setClickedLocationMarker(null) // Bei Default-Locations keinen expliziten Klick-Marker, Karte zentriert sich eh
   }
 
   const refreshData = () => {
@@ -341,12 +324,11 @@ export default function Home() {
   }
 
   const useMockData = () => {
-    stopLiveTracking()
+    clearUserLocationStateAndCompass()
     setApiError(null)
     setLoading(true)
     setLocation(null)
     setLocationName("Demo Daten")
-    setUserLocationMarker(null)
     setClickedLocationMarker(null)
     import("@/mock/mobility-data").then((module) => {
       const allMockVehicles = module.default
@@ -369,24 +351,17 @@ export default function Home() {
   const handleMapInteractionSearch = (newCenter: [number, number], type: "move" | "click") => {
     if (type === "click" && selectedVehicle) {
       setSelectedVehicle(null)
-      console.log("Vehicle details closed by map click.")
       return
     }
     if (type === "click") {
-      console.log("Map clicked for new location search at:", newCenter)
-      stopLiveTracking()
-      setClickedLocationMarker(newCenter)
-      setUserLocationMarker(null)
+      clearUserLocationStateAndCompass() // Kompass und blauen Punkt entfernen
+      setClickedLocationMarker(newCenter) // Klick-Marker für Kartenklick setzen
       setLocationName("Ausgewählter Punkt")
-      setLocation(newCenter)
+      setLocation(newCenter) // Dies löst den useEffect für fetchSpatialVehicles aus
     }
   }
 
-  const currentMapZoom = isLiveTracking
-    ? LIVE_TRACKING_ZOOM
-    : location
-      ? ACTIVE_SEARCH_INITIAL_ZOOM
-      : DEFAULT_MAP_ZOOM_OVERVIEW
+  const currentMapZoom = location ? ACTIVE_SEARCH_ZOOM : DEFAULT_MAP_ZOOM_OVERVIEW
 
   return (
     <main className="flex min-h-screen flex-col">
@@ -411,7 +386,7 @@ export default function Home() {
               size="sm"
               onClick={refreshData}
               className="hidden sm:flex items-center gap-1 ml-2"
-              disabled={loading && !isLiveTracking}
+              disabled={loading}
             >
               <RefreshCw className="h-4 w-4" />
               Aktualisieren
@@ -421,7 +396,7 @@ export default function Home() {
 
         {lastUpdated && locationName && (
           <p className="text-sm text-muted-foreground mb-4 hidden sm:block">
-            Zuletzt aktualisiert: {lastUpdated.toLocaleTimeString()} {isLiveTracking && "(Live)"}
+            Zuletzt aktualisiert: {lastUpdated.toLocaleTimeString()}
           </p>
         )}
 
@@ -446,7 +421,7 @@ export default function Home() {
               onLocationSearch={handleLocationSearch}
               onSetCurrentLocation={handleSetCurrentLocation}
               defaultLocations={defaultLocations}
-              isLiveTrackingActive={isLiveTracking}
+              isUserLocationActive={!!userLocationMarker} // Um den Button-Zustand zu steuern
             />
             <div className="mt-4 sm:hidden">
               <div className="flex items-center justify-start space-x-3">
@@ -455,15 +430,13 @@ export default function Home() {
                   size="sm"
                   onClick={refreshData}
                   className="flex items-center gap-1"
-                  disabled={loading && !isLiveTracking}
+                  disabled={loading}
                 >
                   <RefreshCw className="h-4 w-4" />
                   Aktualisieren
                 </Button>
                 {lastUpdated && locationName && (
-                  <p className="text-xs text-muted-foreground">
-                    Aktualisiert: {lastUpdated.toLocaleTimeString()} {isLiveTracking && "(Live)"}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Aktualisiert: {lastUpdated.toLocaleTimeString()}</p>
                 )}
               </div>
             </div>
@@ -473,8 +446,8 @@ export default function Home() {
             <div className="rounded-lg overflow-hidden border h-[70vh] relative" ref={mapContainerRef}>
               {locationName && !loading && (
                 <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium flex items-center">
+                  {userLocationMarker && <LocateFixed className="h-4 w-4 mr-1.5 text-blue-500" />}
                   {clickedLocationMarker && <MapPin className="h-4 w-4 mr-1.5 text-red-500" />}
-                  {userLocationMarker && <Compass className="h-4 w-4 mr-1.5 text-blue-500" />}
                   {!userLocationMarker && !clickedLocationMarker && location && (
                     <MapPin className="h-4 w-4 mr-1.5 text-gray-500" />
                   )}
@@ -484,7 +457,7 @@ export default function Home() {
                   </Badge>
                 </div>
               )}
-              {loading && !isLiveTracking && (
+              {loading && (
                 <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
                   <Loader2 className="h-8 w-8 animate-spin" />
                   <span className="ml-2">Fahrzeuge werden geladen...</span>
@@ -492,7 +465,7 @@ export default function Home() {
               )}
               <LeafletMap
                 center={location || DEFAULT_MAP_CENTER}
-                initialZoom={currentMapZoom}
+                currentZoom={currentMapZoom} // Umbenannt von initialZoom zu currentZoom für Klarheit
                 vehicles={vehicles}
                 onVehicleSelect={handleVehicleSelect}
                 searchRadius={FIXED_SEARCH_RADIUS}
@@ -500,10 +473,8 @@ export default function Home() {
                 clickedLocation={clickedLocationMarker}
                 showRadius={!!location}
                 onMapInteraction={handleMapInteractionSearch}
-                isSearchOnMapMoveActive={false}
                 deviceHeading={deviceHeading}
                 showCompass={showCompass}
-                isLiveTracking={isLiveTracking}
               />
             </div>
 
