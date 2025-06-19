@@ -13,17 +13,16 @@ import Link from "next/link"
 
 interface MapProps {
   center: [number, number]
-  currentZoom: number // Changed from initialZoom
+  currentZoom: number
   vehicles: MobilityVehicle[]
   onVehicleSelect: (vehicle: MobilityVehicle) => void
   userLocation: [number, number] | null
-  clickedLocation: [number, number] | null // New prop for clicked location marker
+  clickedLocation: [number, number] | null
   searchRadius: number
   showRadius: boolean
-  onMapInteraction: (newCenter: [number, number], type: "click") => void // New prop
-  deviceHeading: number | null // For compass
-  showCompass: boolean // To show/hide compass
-  isFollowingUser?: boolean // To control map dragging when user location is active
+  onMapInteraction: (newCenter: [number, number], type: "click") => void
+  deviceHeading: number | null
+  showCompass: boolean
 }
 
 const providerColors: Record<string, { primary: string; background: string }> = {
@@ -137,10 +136,9 @@ interface MapLogicControllerProps {
   center: [number, number]
   currentZoom: number
   onMapInteraction: (newCenter: [number, number], type: "click") => void
-  isFollowingUser?: boolean
 }
 
-function MapLogicController({ center, currentZoom, onMapInteraction, isFollowingUser }: MapLogicControllerProps) {
+function MapLogicController({ center, currentZoom, onMapInteraction }: MapLogicControllerProps) {
   const map = useMap()
 
   useEffect(() => {
@@ -154,36 +152,28 @@ function MapLogicController({ center, currentZoom, onMapInteraction, isFollowing
         Math.abs(currentMapCenter.lat - center[0]) > 1e-6 || Math.abs(currentMapCenter.lng - center[1]) > 1e-6
       const zoomChanged = currentMapZoom !== currentZoom
 
-      if (isFollowingUser) {
-        if (map.dragging.enabled()) map.dragging.disable()
-        if (centerChanged || zoomChanged) {
-          map.setView(leafletCenter, currentZoom, viewOptions)
-        }
-      } else {
-        if (!map.dragging.enabled()) map.dragging.enable()
-        if (centerChanged || zoomChanged) {
-          map.setView(leafletCenter, currentZoom, viewOptions)
-        }
+      // Always ensure dragging is enabled
+      if (!map.dragging.enabled()) map.dragging.enable()
+
+      if (centerChanged || zoomChanged) {
+        map.setView(leafletCenter, currentZoom, viewOptions)
       }
     })
-  }, [center, currentZoom, map, isFollowingUser])
+  }, [center, currentZoom, map])
 
   useEffect(() => {
     const handleClick = (e: LeafletMouseEvent) => {
       const target = e.originalEvent.target as HTMLElement
 
-      // Check if click was on a vehicle marker, popup, or control
       if (
         target.closest(".leaflet-marker-icon") ||
         target.closest(".leaflet-popup-content-wrapper") ||
         target.closest(".leaflet-popup-tip-container") ||
         target.closest(".leaflet-control")
       ) {
-        // Click was on a marker, popup, or control - don't trigger map interaction
         return
       }
 
-      // Click was on empty map area - trigger map interaction
       onMapInteraction([e.latlng.lat, e.latlng.lng], "click")
     }
 
@@ -208,7 +198,6 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   onMapInteraction,
   deviceHeading,
   showCompass,
-  isFollowingUser,
 }) => {
   const blueDotOptions = { color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1 }
   const leafletCenter: LatLngExpression = [center[0], center[1]]
@@ -236,28 +225,25 @@ const LeafletMapComponent: React.FC<MapProps> = ({
     <MapContainer
       center={leafletCenter}
       zoom={currentZoom}
-      style={{ height: "100%", width: "100%", touchAction: "auto" }} // touchAction: auto for better mobile experience
+      style={{ height: "100%", width: "100%", touchAction: "pan-y pinch-zoom" }} // Better touch handling
       scrollWheelZoom={true}
-      dragging={!isFollowingUser} // Disable dragging when following user
+      dragging={true} // Always enable dragging
+      touchZoom={true}
+      doubleClickZoom={true}
+      zoomControl={true}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <MapLogicController
-        center={center}
-        currentZoom={currentZoom}
-        onMapInteraction={onMapInteraction}
-        isFollowingUser={isFollowingUser}
-      />
-      {showRadius &&
-        center && ( // Ensure center is not null for radius circle
-          <Circle
-            center={leafletCenter}
-            radius={searchRadius}
-            pathOptions={{ color: "#3b82f6", fillColor: "#3b82f680", fillOpacity: 0.1, weight: 1 }}
-          />
-        )}
+      <MapLogicController center={center} currentZoom={currentZoom} onMapInteraction={onMapInteraction} />
+      {showRadius && center && (
+        <Circle
+          center={leafletCenter}
+          radius={searchRadius}
+          pathOptions={{ color: "#3b82f6", fillColor: "#3b82f680", fillOpacity: 0.1, weight: 1 }}
+        />
+      )}
 
       {userLeafletLocation && (
         <>
@@ -268,9 +254,9 @@ const LeafletMapComponent: React.FC<MapProps> = ({
             position={userLeafletLocation}
             icon={createCompassIcon(deviceHeading)}
             ref={compassMarkerRef}
-            keyboard={false} // Disable keyboard interaction for this marker
-            zIndexOffset={1000} // Ensure compass is on top
-            opacity={showCompass && deviceHeading !== null ? 1 : 0} // Control visibility
+            keyboard={false}
+            zIndexOffset={1000}
+            opacity={showCompass && deviceHeading !== null ? 1 : 0}
           />
         </>
       )}
@@ -296,7 +282,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
               icon={customIcon}
               eventHandlers={{
                 click: () => {
-                  onVehicleSelect(vehicle) // This will set the selectedVehicle in the parent
+                  onVehicleSelect(vehicle)
                 },
               }}
             >

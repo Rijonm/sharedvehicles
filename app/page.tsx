@@ -71,12 +71,9 @@ export default function Home() {
     } else if (typeof event.webkitCompassHeading === "number") {
       heading = event.webkitCompassHeading
     } else if (typeof event.alpha === "number" && !event.absolute) {
-      // For non-absolute, it's relative to device, might need calibration or offset
-      // For simplicity, we'll use it as is, but it might not be true north
       heading = event.alpha
     }
     if (heading !== null) {
-      // Only update if change is significant to avoid jitter
       setDeviceHeading((prevHeading) => (Math.abs((prevHeading ?? 0) - heading!) > 1 ? heading : prevHeading))
     }
   }
@@ -103,9 +100,7 @@ export default function Home() {
             }
           })
           .catch((error) => {
-            // Catch potential errors from requestPermission
             console.warn("Error requesting device orientation permission or fallback:", error)
-            // Fallback for browsers that might throw error or don't have requestPermission
             // @ts-ignore
             window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
             // @ts-ignore
@@ -113,7 +108,6 @@ export default function Home() {
             deviceOrientationListenerAttached.current = true
           })
       } else {
-        // Fallback for browsers without requestPermission API
         // @ts-ignore
         window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
         // @ts-ignore
@@ -131,8 +125,8 @@ export default function Home() {
       window.removeEventListener("deviceorientation", handleDeviceOrientation, true)
       deviceOrientationListenerAttached.current = false
     }
-    setDeviceHeading(null) // Reset heading
-    setShowCompass(false) // Hide compass visually
+    setDeviceHeading(null)
+    setShowCompass(false)
   }
 
   const stopUserTracking = () => {
@@ -141,7 +135,6 @@ export default function Home() {
       watchIdRef.current = null
     }
     setIsUserTrackingActive(false)
-    // setUserLocationMarker(null); // Keep last known location for context if needed, or clear based on UX
     stopDeviceOrientationListener()
   }
 
@@ -169,21 +162,17 @@ export default function Home() {
             (position) => {
               const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
               setUserLocationMarker(currentCoords) // Update blue dot
-              // If map should follow user live & re-fetch, update searchCenter here:
-              // if (isUserTrackingActive) setSearchCenter(currentCoords);
-              // For now, only blue dot moves, search is manual/initial.
             },
             (error) => {
               console.warn(`Fehler bei watchPosition: ${error.message}`)
-              // Optionally handle watchPosition errors, e.g., stop tracking or notify user
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
           )
-          setLoading(false) // Loading for initial getCurrentPosition is done
+          setLoading(false)
         },
         (error) => {
           setLoading(false)
-          stopUserTracking() // Ensure everything is reset on error
+          stopUserTracking()
           console.error(`Fehler bei getCurrentPosition: ${error.message}`)
           toast({
             title: "Standortfehler",
@@ -203,7 +192,6 @@ export default function Home() {
   }
 
   useEffect(() => {
-    // Cleanup function to stop tracking when component unmounts
     return () => stopUserTracking()
   }, [])
 
@@ -214,7 +202,7 @@ export default function Home() {
   ): Promise<MobilityVehicle[]> {
     if (!center || !center[0] || !center[1]) return []
     const params = new URLSearchParams()
-    params.append("Geometry", `${center[1]},${center[0]}`) // API expects lon,lat
+    params.append("Geometry", `${center[1]},${center[0]}`)
     params.append("Tolerance", radius)
     params.append("filters", filterValue)
     try {
@@ -231,7 +219,6 @@ export default function Home() {
     if (!currentSearchLoc) return
     setLoading(true)
     setApiError(null)
-    // setVehicles([]); // Optionally clear previous vehicles immediately
 
     try {
       const results = await Promise.all(
@@ -280,12 +267,12 @@ export default function Home() {
   }
 
   const handleLocationSearch = (newLocation: [number, number], name: string) => {
-    stopUserTracking() // Stop "Mein Standort" mode if active
+    stopUserTracking()
     setLoading(true)
     setSearchCenter(newLocation)
-    setUserLocationMarker(null) // Clear user's blue dot
+    setUserLocationMarker(null)
     setLocationName(name)
-    setClickedLocationMarker(newLocation) // Show marker for searched location
+    setClickedLocationMarker(newLocation)
     fetchSpatialVehicles(newLocation)
   }
 
@@ -295,7 +282,7 @@ export default function Home() {
     setSearchCenter(locationData.coords)
     setUserLocationMarker(null)
     setLocationName(locationData.name)
-    setClickedLocationMarker(null) // No specific marker for default locations, map centers on it
+    setClickedLocationMarker(null)
     fetchSpatialVehicles(locationData.coords)
   }
 
@@ -315,7 +302,7 @@ export default function Home() {
     stopUserTracking()
     setApiError(null)
     setLoading(true)
-    setSearchCenter(null) // Clear search center for mock data
+    setSearchCenter(null)
     setUserLocationMarker(null)
     setLocationName("Demo Daten")
     setClickedLocationMarker(null)
@@ -339,28 +326,22 @@ export default function Home() {
 
   const handleMapInteractionSearch = (newCenter: [number, number], type: "click") => {
     if (type === "click") {
-      // If a vehicle detail is open, first click should only close it
       if (selectedVehicle) {
-        setSelectedVehicle(null) // Close detail view
-        return // Don't search yet, wait for next click
+        setSelectedVehicle(null)
+        return
       }
 
-      // No detail view is open, proceed with search at clicked location
-      stopUserTracking() // Stop "Mein Standort" mode if active
+      stopUserTracking() // This will disable user tracking mode
       setLoading(true)
       setSearchCenter(newCenter)
-      setUserLocationMarker(null) // Clear user's blue dot
+      setUserLocationMarker(null)
       setLocationName("Ausgewählter Punkt")
-      setClickedLocationMarker(newCenter) // Show marker for the clicked location
+      setClickedLocationMarker(newCenter)
       fetchSpatialVehicles(newCenter)
     }
   }
 
-  const currentMapZoom = isUserTrackingActive
-    ? USER_FOLLOW_ZOOM
-    : searchCenter
-      ? ACTIVE_SEARCH_ZOOM
-      : DEFAULT_MAP_ZOOM_OVERVIEW
+  const currentMapZoom = searchCenter ? ACTIVE_SEARCH_ZOOM : DEFAULT_MAP_ZOOM_OVERVIEW
 
   return (
     <main className="flex min-h-screen flex-col">
@@ -420,7 +401,6 @@ export default function Home() {
               onLocationSearch={handleLocationSearch}
               onSetCurrentLocation={handleSetCurrentLocation}
               defaultLocations={defaultLocations}
-              // Pass isUserLocationActive to control button style in MobilityFilters
               isUserLocationActive={isUserTrackingActive}
             />
             <div className="mt-4 sm:hidden">
@@ -470,14 +450,14 @@ export default function Home() {
                 currentZoom={currentMapZoom}
                 vehicles={vehicles}
                 onVehicleSelect={handleVehicleSelect}
-                searchRadius={FIXED_SEARCH_RADIUS} // Always use fixed radius for display
+                searchRadius={FIXED_SEARCH_RADIUS}
                 userLocation={userLocationMarker}
                 clickedLocation={clickedLocationMarker}
-                showRadius={!!searchCenter} // Show radius if a search is active
+                showRadius={!!searchCenter}
                 onMapInteraction={handleMapInteractionSearch}
                 deviceHeading={deviceHeading}
                 showCompass={showCompass}
-                isFollowingUser={isUserTrackingActive}
+                // Removed isFollowingUser prop - map dragging is always enabled now
               />
             </div>
 
