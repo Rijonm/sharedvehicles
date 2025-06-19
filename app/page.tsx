@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
-import { Loader2, AlertCircle, RefreshCw, Info, MapPin } from "lucide-react" // MapPin hinzugefügt
+import { Loader2, AlertCircle, RefreshCw, Info, MapPin, Compass } from "lucide-react" // Compass hinzugefügt
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -54,7 +54,8 @@ export default function Home() {
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isHomescreenModalOpen, setIsHomescreenModalOpen] = useState(false)
-  // - const [searchOnMapMove, setSearchOnMapMove] = useState(false)
+  const [deviceHeading, setDeviceHeading] = useState<number | null>(null)
+  const [showCompass, setShowCompass] = useState(false)
 
   const { toast } = useToast()
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -65,11 +66,11 @@ export default function Home() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
-          setLocation(currentCoords) // Suchmittelpunkt ist der eigene Standort
-          setUserLocationMarker(currentCoords) // Blauen Punkt setzen
-          setClickedLocationMarker(null) // Klick-Marker entfernen
+          setLocation(currentCoords)
+          setUserLocationMarker(currentCoords)
+          setClickedLocationMarker(null)
           setLocationName("Ihr Standort")
-          // - setSearchOnMapMove(true)
+          setShowCompass(true) // Kompass anzeigen, wenn "Mein Standort" aktiv ist
           toast({
             title: "Standort aktualisiert",
             description: `Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m werden gesucht.`,
@@ -80,6 +81,7 @@ export default function Home() {
           setUserLocationMarker(null)
           setLocation(null)
           setLocationName("")
+          setShowCompass(false)
           console.log(`Geolocation error (${error.code}): ${error.message}`)
           let description = "Ihr Standort konnte nicht ermittelt werden."
           if (error.code === 1) {
@@ -98,6 +100,7 @@ export default function Home() {
       setUserLocationMarker(null)
       setLocation(null)
       setLocationName("")
+      setShowCompass(false)
       toast({
         title: "Standort nicht verfügbar",
         description:
@@ -107,19 +110,48 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+      if (event.absolute && typeof event.alpha === "number") {
+        // event.alpha for heading
+        setDeviceHeading(event.alpha)
+      } else if (typeof event.webkitCompassHeading === "number") {
+        // For iOS Safari
+        setDeviceHeading(event.webkitCompassHeading)
+      } else if (typeof event.alpha === "number" && !event.absolute && event.beta !== null && event.gamma !== null) {
+        // Fallback for non-absolute, but still try to use alpha if available
+        // This might not be true north but device's current orientation
+        setDeviceHeading(event.alpha)
+      }
+    }
+
+    if (showCompass && window.DeviceOrientationEvent) {
+      // @ts-ignore: Type definitions might not include webkitCompassHeading directly
+      window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
+      // @ts-ignore
+      window.addEventListener("deviceorientation", handleDeviceOrientation, true)
+    }
+
+    return () => {
+      if (window.DeviceOrientationEvent) {
+        // @ts-ignore
+        window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
+        // @ts-ignore
+        window.removeEventListener("deviceorientation", handleDeviceOrientation, true)
+      }
+    }
+  }, [showCompass])
+
   async function fetchVehiclesForType(
     filterValue: string,
     currentLocation: [number, number],
     radius: string,
   ): Promise<MobilityVehicle[]> {
     if (!currentLocation || !currentLocation[0] || !currentLocation[1]) return []
-
     const params = new URLSearchParams()
     params.append("Geometry", `${currentLocation[1]},${currentLocation[0]}`)
     params.append("Tolerance", radius)
     params.append("filters", filterValue)
-    // offset=0 is default, limit=50 is default by API
-
     try {
       const response = await fetch(`/api/mobility?${params.toString()}`)
       if (!response.ok) {
@@ -141,19 +173,15 @@ export default function Home() {
 
   const fetchSpatialVehicles = async () => {
     if (!location || !location[0] || !location[1]) return
-
     setLoading(true)
     setApiError(null)
     setVehicles([])
-
     try {
       const vehiclePromises = VEHICLE_TYPE_API_FILTERS.map((filter) =>
         fetchVehiclesForType(filter, location, FIXED_SEARCH_RADIUS.toString()),
       )
-
       const resultsPerType = await Promise.all(vehiclePromises)
       const combinedVehiclesRaw = resultsPerType.flat()
-
       const uniqueVehiclesMap = new Map<string, MobilityVehicle>()
       combinedVehiclesRaw.forEach((vehicle) => {
         if (!uniqueVehiclesMap.has(vehicle.id)) {
@@ -161,10 +189,8 @@ export default function Home() {
         }
       })
       const finalVehicles = Array.from(uniqueVehiclesMap.values())
-
       setVehicles(finalVehicles)
       setLastUpdated(new Date())
-
       if (finalVehicles.length === 0) {
         toast({
           title: "Keine Fahrzeuge gefunden",
@@ -194,7 +220,6 @@ export default function Home() {
   useEffect(() => {
     if (location) {
       fetchSpatialVehicles()
-      // Scroll zur Karte, wenn ein Standort ausgewählt wurde
       if (mapContainerRef.current) {
         mapContainerRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
       }
@@ -212,9 +237,9 @@ export default function Home() {
     setLoading(true)
     setLocation(newLocation)
     setLocationName(name)
-    setUserLocationMarker(null)
-    setClickedLocationMarker(newLocation)
-    // - setSearchOnMapMove(true)
+    setUserLocationMarker(null) // Bei expliziter Suche "Mein Standort"-Marker entfernen
+    setClickedLocationMarker(newLocation) // Klick-Marker setzen (oder aktualisieren)
+    setShowCompass(false) // Kompass ausblenden, da nicht mehr "Mein Standort"
   }
 
   const handleDefaultLocationSelect = (locationData: { name: string; coords: [number, number] }) => {
@@ -223,6 +248,7 @@ export default function Home() {
     setLocationName(locationData.name)
     setUserLocationMarker(null)
     setClickedLocationMarker(null)
+    setShowCompass(false)
   }
 
   const refreshData = () => {
@@ -244,6 +270,7 @@ export default function Home() {
     setLocationName("Demo Daten")
     setUserLocationMarker(null)
     setClickedLocationMarker(null)
+    setShowCompass(false)
     import("@/mock/mobility-data").then((module) => {
       const allMockVehicles = module.default
       const uniqueVehiclesMap = new Map<string, MobilityVehicle>()
@@ -259,19 +286,25 @@ export default function Home() {
         description: "Umgewechselt auf Demo-Modus mit Beispielfahrzeugen aller Typen.",
       })
       setLoading(false)
-      // - setSearchOnMapMove(true)
     })
   }
 
   const handleMapInteractionSearch = (newCenter: [number, number], type: "move" | "click") => {
-    if (type === "click") {
-      setClickedLocationMarker(newCenter) // Roten Pin für Klick setzen
-      setUserLocationMarker(null) // Blauen "Mein Standort"-Pin entfernen
-      setLocationName("Ausgewählter Punkt")
-      setLocation(newCenter) // Suchmittelpunkt aktualisieren und Suche auslösen (via useEffect)
+    // NEU: Wenn Detailansicht offen ist, schließe sie beim ersten Klick und mache nichts weiter.
+    if (type === "click" && selectedVehicle) {
+      setSelectedVehicle(null)
+      return // Verhindere weitere Aktionen für diesen Klick
     }
-    // Der "move"-Fall wird nicht mehr behandelt, um eine Suche auszulösen.
-    // Die Karte kann weiterhin bewegt werden, aber es erfolgt keine automatische neue Abfrage.
+
+    // Bestehende Logik für den Klick-Fall (wird nur ausgeführt, wenn selectedVehicle null war)
+    if (type === "click") {
+      setClickedLocationMarker(newCenter)
+      setUserLocationMarker(null)
+      setLocationName("Ausgewählter Punkt")
+      setLocation(newCenter)
+      setShowCompass(false)
+    }
+    // Die "move"-Logik bleibt unberührt (und ist aktuell deaktiviert für die Suche)
   }
 
   return (
@@ -283,7 +316,6 @@ export default function Home() {
             <p className="text-sm text-gray-600 mt-2">Alle Sharing-Anbieter auf einen Blick.</p>
           </div>
           <div className="flex items-center">
-            {/* Info Button - visible ONLY on mobile screens, now smaller */}
             <Button
               variant="ghost"
               size="sm"
@@ -293,7 +325,6 @@ export default function Home() {
             >
               <Info className="h-3.5 w-3.5 text-gray-500" />
             </Button>
-            {/* Desktop Refresh Button - hidden on small screens, visible sm and up */}
             <Button
               variant="outline"
               size="sm"
@@ -306,7 +337,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Desktop Last Updated - hidden on small screens, visible sm and up */}
         {lastUpdated && locationName && (
           <p className="text-sm text-muted-foreground mb-4 hidden sm:block">
             Zuletzt aktualisiert: {lastUpdated.toLocaleTimeString()}
@@ -335,7 +365,6 @@ export default function Home() {
               onSetCurrentLocation={handleSetCurrentLocation}
               defaultLocations={defaultLocations}
             />
-            {/* Mobile Refresh Section - visible only on small screens (below sm) */}
             <div className="mt-4 sm:hidden">
               <div className="flex items-center justify-start space-x-3">
                 <Button variant="outline" size="sm" onClick={refreshData} className="flex items-center gap-1">
@@ -354,7 +383,7 @@ export default function Home() {
               {locationName && !loading && (
                 <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium flex items-center">
                   {clickedLocationMarker && <MapPin className="h-4 w-4 mr-1.5 text-red-500" />}
-                  {userLocationMarker && <MapPin className="h-4 w-4 mr-1.5 text-blue-500" />}
+                  {userLocationMarker && <Compass className="h-4 w-4 mr-1.5 text-blue-500" />}
                   {!userLocationMarker && !clickedLocationMarker && location && (
                     <MapPin className="h-4 w-4 mr-1.5 text-gray-500" />
                   )}
@@ -375,12 +404,14 @@ export default function Home() {
                 initialZoom={location ? ACTIVE_SEARCH_INITIAL_ZOOM : DEFAULT_MAP_ZOOM_OVERVIEW}
                 vehicles={vehicles}
                 onVehicleSelect={handleVehicleSelect}
-                searchRadius={FIXED_SEARCH_RADIUS} // Immer den festen Radius verwenden
-                userLocation={userLocationMarker} // Für den blauen Punkt
-                clickedLocation={clickedLocationMarker} // Für den roten Pin
+                searchRadius={FIXED_SEARCH_RADIUS}
+                userLocation={userLocationMarker}
+                clickedLocation={clickedLocationMarker}
                 showRadius={!!location}
                 onMapInteraction={handleMapInteractionSearch}
-                isSearchOnMapMoveActive={false}
+                isSearchOnMapMoveActive={false} // Suche bei Kartenbewegung ist deaktiviert
+                deviceHeading={deviceHeading} // Heading an Karte übergeben
+                showCompass={showCompass} // Kompass-Anzeige steuern
               />
             </div>
 
@@ -392,8 +423,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-      {/* Add to Homescreen Modal */}
       <AddToHomescreenModal open={isHomescreenModalOpen} onOpenChange={setIsHomescreenModalOpen} />
     </main>
   )

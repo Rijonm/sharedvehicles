@@ -18,20 +18,22 @@ import "leaflet/dist/leaflet.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone } from "lucide-react"
+import { Bike, Car, CreditCard, ExternalLink, MapPin, Smartphone, Phone } from "lucide-react" // Compass Icon
 import Link from "next/link"
 
 interface MapProps {
-  center: [number, number] // Der aktuelle Suchmittelpunkt
+  center: [number, number]
   initialZoom: number
   vehicles: MobilityVehicle[]
   onVehicleSelect: (vehicle: MobilityVehicle) => void
-  userLocation: [number, number] | null // Für den blauen "Mein Standort"-Punkt
-  clickedLocation: [number, number] | null // Für den roten Pin nach Klick
+  userLocation: [number, number] | null
+  clickedLocation: [number, number] | null
   searchRadius: number
   showRadius: boolean
   onMapInteraction: (newCenter: [number, number], type: "move" | "click") => void
   isSearchOnMapMoveActive: boolean
+  deviceHeading: number | null // Für Kompass
+  showCompass: boolean // Um Kompass-Marker zu steuern
 }
 
 const providerColors: Record<string, { primary: string; background: string }> = {
@@ -121,9 +123,26 @@ const clickedLocationIcon = new L.Icon({
     </svg>
   `),
   iconSize: [32, 32],
-  iconAnchor: [16, 32], // Spitze des Pins
+  iconAnchor: [16, 32],
   popupAnchor: [0, -32],
 })
+
+// Kompass-Icon als SVG (Pfeil nach oben)
+const compassIconSvg = `
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%233B82F6" width="28px" height="28px" style="transform: rotate(var(--heading, 0deg)); transition: transform 0.1s ease-out;">
+    <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 2.99.71-.71L12 2z"/>
+  </svg>
+`
+
+function createCompassIcon(heading: number | null): L.DivIcon {
+  const rotation = heading !== null ? heading : 0
+  return L.divIcon({
+    html: `<div style="--heading: ${rotation}deg; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">${compassIconSvg.replace("%233B82F6", "#3B82F6")}</div>`, // Farbe hier direkt einsetzen
+    className: "compass-marker-icon",
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  })
+}
 
 function MapLogicController({
   center,
@@ -131,29 +150,24 @@ function MapLogicController({
   vehicles,
   searchRadius,
   onMapInteraction,
-  isSearchOnMapMoveActive, // Behalten, um die Logik klar zu steuern
 }: {
   center: [number, number]
   initialZoom: number
   vehicles: MobilityVehicle[]
   searchRadius: number
   onMapInteraction: (newCenter: [number, number], type: "move" | "click") => void
-  isSearchOnMapMoveActive: boolean // Wird jetzt effektiv ignoriert für 'move' oder auf false gesetzt
 }) {
   const map = useMap()
   const isInitialLoad = useRef(true)
   const internalCenterRef = useRef<L.LatLng>(L.latLng(center[0], center[1]))
 
   useEffect(() => {
-    // Diese Logik bleibt weitgehend gleich, um die Karte bei Änderungen von `center` (z.B. durch Klick)
-    // oder initialem Laden korrekt zu positionieren und zu zoomen.
     if (isInitialLoad.current) {
       map.setView(center, initialZoom)
       isInitialLoad.current = false
       internalCenterRef.current = L.latLng(center[0], center[1])
     } else {
       const currentMapCenter = map.getCenter()
-      // Nur anpassen, wenn das 'center'-Prop von außen geändert wurde (z.B. durch Klick)
       if (currentMapCenter.lat !== center[0] || currentMapCenter.lng !== center[1]) {
         const zoomForRadius = (radius: number): number => {
           if (radius <= 250) return 17
@@ -165,40 +179,26 @@ function MapLogicController({
         }
         const maxZoomForFit = 18
         const leafletCenter: LatLngExpression = [center[0], center[1]]
-
         if (vehicles.length > 0) {
           const bounds = new L.LatLngBounds()
           bounds.extend(leafletCenter)
           vehicles.forEach((v) => bounds.extend([v.geometry.coordinates[1], v.geometry.coordinates[0]]))
-          if (bounds.isValid()) {
-            map.fitBounds(bounds, { padding: [50, 50], maxZoom: maxZoomForFit })
-          } else {
-            map.setView(leafletCenter, zoomForRadius(searchRadius))
-          }
+          if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50], maxZoom: maxZoomForFit })
+          else map.setView(leafletCenter, zoomForRadius(searchRadius))
         } else {
           map.setView(leafletCenter, zoomForRadius(searchRadius))
         }
         internalCenterRef.current = L.latLng(center[0], center[1])
       }
     }
-  }, [center, initialZoom, vehicles, searchRadius, map]) // isSearchOnMapMoveActive hier entfernt, da es die View-Anpassung nicht direkt steuern soll
+  }, [center, initialZoom, vehicles, searchRadius, map])
 
   useMapEvents({
-    moveend: () => {
-      // Die folgende Logik wird entfernt oder auskommentiert,
-      // da das Verschieben der Karte keine neue Suche mehr auslösen soll.
-      // if (isSearchOnMapMoveActive) { // Dieser Check ist jetzt immer false oder der Block wird entfernt
-      //   const newMapCenter = map.getCenter();
-      //   if (newMapCenter.lat !== internalCenterRef.current.lat || newMapCenter.lng !== internalCenterRef.current.lng) {
-      //     internalCenterRef.current = newMapCenter;
-      //     onMapInteraction([newMapCenter.lat, newMapCenter.lng], "move");
-      //   }
-      // }
-    },
     click: (e) => {
-      internalCenterRef.current = e.latlng // Internen Mittelpunkt für Referenz aktualisieren
-      onMapInteraction([e.latlng.lat, e.latlng.lng], "click") // Klick löst weiterhin Suche aus
+      internalCenterRef.current = e.latlng
+      onMapInteraction([e.latlng.lat, e.latlng.lng], "click")
     },
+    // moveend wird nicht mehr für die Suche verwendet
   })
 
   return null
@@ -214,22 +214,35 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   searchRadius,
   showRadius,
   onMapInteraction,
-  isSearchOnMapMoveActive,
+  isSearchOnMapMoveActive, // Bleibt für Klarheit, wird aber nicht für 'move' genutzt
+  deviceHeading,
+  showCompass,
 }) => {
   const blueDotOptions = { color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1 }
-  const leafletCenter: LatLngExpression = [center[0], center[1]] // Dies ist der Suchmittelpunkt
+  const leafletCenter: LatLngExpression = [center[0], center[1]]
   const userLeafletLocation: LatLngExpression | null = userLocation ? [userLocation[0], userLocation[1]] : null
   const clickedLeafletLocation: LatLngExpression | null = clickedLocation
     ? [clickedLocation[0], clickedLocation[1]]
     : null
   const autoPanPaddingValue: PointExpression = [10, 55]
 
+  const compassMarkerRef = useRef<L.Marker | null>(null)
+
+  useEffect(() => {
+    if (compassMarkerRef.current && deviceHeading !== null) {
+      const icon = createCompassIcon(deviceHeading)
+      compassMarkerRef.current.setIcon(icon)
+    }
+  }, [deviceHeading])
+
   return (
     <MapContainer
       center={leafletCenter}
       zoom={initialZoom}
-      style={{ height: "100%", width: "100%" }}
+      style={{ height: "100%", width: "100%", touchAction: "auto" }} // touchAction: 'auto' hinzugefügt
       scrollWheelZoom={true}
+      // Für bessere Touch-Interaktion auf mobilen Geräten, besonders wenn Klicks nicht zuverlässig sind:
+      // tap={true} // Leaflet's tap event, kann helfen, aber zuerst ohne versuchen
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -241,7 +254,6 @@ const LeafletMapComponent: React.FC<MapProps> = ({
         vehicles={vehicles}
         searchRadius={searchRadius}
         onMapInteraction={onMapInteraction}
-        isSearchOnMapMoveActive={isSearchOnMapMoveActive}
       />
       {showRadius && center && (
         <Circle
@@ -250,11 +262,23 @@ const LeafletMapComponent: React.FC<MapProps> = ({
           pathOptions={{ color: "#3b82f6", fillColor: "#3b82f680", fillOpacity: 0.1, weight: 1 }}
         />
       )}
+
       {userLeafletLocation && (
-        <CircleMarker center={userLeafletLocation} pathOptions={blueDotOptions} radius={8}>
-          <Popup>Ihr aktueller Standort</Popup>
-        </CircleMarker>
+        <>
+          <CircleMarker center={userLeafletLocation} pathOptions={blueDotOptions} radius={8}>
+            <Popup>Ihr aktueller Standort</Popup>
+          </CircleMarker>
+          {showCompass && (
+            <Marker
+              position={userLeafletLocation}
+              icon={createCompassIcon(deviceHeading)}
+              ref={compassMarkerRef}
+              keyboard={false} // Verhindert, dass der Marker fokussierbar ist
+            />
+          )}
+        </>
       )}
+
       {clickedLeafletLocation && (
         <Marker position={clickedLeafletLocation} icon={clickedLocationIcon}>
           <Popup>Suchzentrum</Popup>
