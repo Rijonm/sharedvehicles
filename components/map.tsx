@@ -1,9 +1,9 @@
 "use client"
 
 import type React from "react"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { MapContainer, TileLayer, Marker, Popup, useMap, Circle, LayerGroup, CircleMarker } from "react-leaflet"
-import L, { type LatLngExpression, type PointExpression } from "leaflet"
+import L, { type LatLngExpression, type PointExpression, type LeafletMouseEvent, type ZoomPanOptions } from "leaflet"
 import "leaflet/dist/leaflet.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { Button } from "@/components/ui/button"
@@ -13,62 +13,54 @@ import Link from "next/link"
 
 interface MapProps {
   center: [number, number]
-  initialZoom: number
+  currentZoom: number // Changed from initialZoom
   vehicles: MobilityVehicle[]
   onVehicleSelect: (vehicle: MobilityVehicle) => void
   userLocation: [number, number] | null
+  clickedLocation: [number, number] | null // New prop for clicked location marker
   searchRadius: number
   showRadius: boolean
+  onMapInteraction: (newCenter: [number, number], type: "click") => void // New prop
+  deviceHeading: number | null // For compass
+  showCompass: boolean // To show/hide compass
+  isFollowingUser?: boolean // To control map dragging when user location is active
 }
 
 const providerColors: Record<string, { primary: string; background: string }> = {
-  // E-Scooter
-  "Bolt Technology OÜ": { primary: "#34D186", background: "#ECFDF5" }, // Grün
-  "Voi Technology AB": { primary: "#F46D5B", background: "#FEF2F2" }, // Korallenrot
-  "bird basel": { primary: "#33BBFF", background: "#EFF6FF" }, // Hellblau
-  Lime: { primary: "#00C851", background: "#ECFDF5" }, // Limetten-Grün
-  "Lime City partners from Partners::RegionFeedMediator": { primary: "#00C851", background: "#ECFDF5" }, // Limetten-Grün
-  // Bikes
-  PubliBike: { primary: "#E53935", background: "#FEF2F2" }, // Rot
-  nextbike: { primary: "#4CAF50", background: "#ECFDF5" }, // Grün
-  "donkey republic": { primary: "#FF9800", background: "#FFF7ED" }, // Orange
-  Velospot: { primary: "#8B5CF6", background: "#F5F3FF" }, // Violett (Purple)
-  // Cars
-  Mobility: { primary: "#E53935", background: "#FEF2F2" }, // Rot
-  "SHARE NOW": { primary: "#2196F3", background: "#EFF6FF" }, // Blau
-  Ubeeqo: { primary: "#9C27B0", background: "#FAF5FF" }, // Lila
-  // Fallback für unbekannte Anbieter
-  default: { primary: "#6B7280", background: "#F3F4F6" }, // Grau
+  "Bolt Technology OÜ": { primary: "#34D186", background: "#ECFDF5" },
+  "Voi Technology AB": { primary: "#F46D5B", background: "#FEF2F2" },
+  "bird basel": { primary: "#33BBFF", background: "#EFF6FF" },
+  Lime: { primary: "#00C851", background: "#ECFDF5" },
+  "Lime City partners from Partners::RegionFeedMediator": { primary: "#00C851", background: "#ECFDF5" },
+  PubliBike: { primary: "#E53935", background: "#FEF2F2" },
+  nextbike: { primary: "#4CAF50", background: "#ECFDF5" },
+  "donkey republic": { primary: "#FF9800", background: "#FFF7ED" },
+  Velospot: { primary: "#8B5CF6", background: "#F5F3FF" },
+  Mobility: { primary: "#E53935", background: "#FEF2F2" },
+  "SHARE NOW": { primary: "#2196F3", background: "#EFF6FF" },
+  Ubeeqo: { primary: "#9C27B0", background: "#FAF5FF" },
+  default: { primary: "#6B7280", background: "#F3F4F6" },
 }
 
 function createCustomMarker(vehicleType: string, providerName: string): L.DivIcon {
   const colors = providerColors[providerName] || providerColors.default
   let iconUrl = ""
-  let iconViewBox = "0 0 24 24" // Default viewBox
-
   switch (vehicleType.toLowerCase()) {
     case "bicycle":
     case "bike":
     case "e-bike":
       iconUrl = "/icon-bike.svg"
-      iconViewBox = "0 -3 38 38" // Specific viewBox for bike
       break
     case "scooter":
     case "e-scooter":
     case "moped":
       iconUrl = "/icon-scooter.svg"
-      iconViewBox = "0 0 24 24" // Specific viewBox for scooter
       break
     case "car":
       iconUrl = "/icon-car.svg"
-      iconViewBox = "0 0 24 24" // Specific viewBox for car
       break
     default:
-      // Fallback to a simple circle if no specific icon
-      const fallbackHtml = `
-        <div style="background-color: ${colors.primary}; border: 2px solid ${colors.background}; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-        </div>
-      `
+      const fallbackHtml = `<div style="background-color: ${colors.primary}; border: 2px solid ${colors.background}; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>`
       return L.divIcon({
         html: fallbackHtml,
         className: "custom-vehicle-marker",
@@ -77,20 +69,7 @@ function createCustomMarker(vehicleType: string, providerName: string): L.DivIco
         popupAnchor: [0, -12],
       })
   }
-
-  const html = `
-    <div style="background-color: ${colors.background}; border: 2px solid ${colors.primary}; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-      <img src="${iconUrl}" alt="${vehicleType}" style="width: 20px; height: 20px; fill: ${colors.primary}; stroke: ${colors.primary};" />
-    </div>
-  `
-  // Note: For SVGs to be colored by `fill` or `stroke` CSS properties,
-  // the SVG itself must be designed to inherit these (e.g., using `currentColor`).
-  // If the provided SVGs have hardcoded colors, this `fill` and `stroke` in style might not work as expected.
-  // We are using the img tag, so the fill/stroke will come from the SVG file itself.
-  // To dynamically color them, we would need to inline the SVG content or use CSS masks.
-  // For simplicity with external SVGs, we'll rely on their inherent colors or use them as a single color defined by the `fill` in the SVG file.
-  // The `fill` and `stroke` in the style attribute for the img tag are more of a hint and might not override internal SVG styles.
-
+  const html = `<div style="background-color: ${colors.background}; border: 2px solid ${colors.primary}; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><img src="${iconUrl}" alt="${vehicleType}" style="width: 20px; height: 20px;" /></div>`
   return L.divIcon({
     html: html,
     className: "custom-vehicle-marker",
@@ -125,94 +104,176 @@ const getReactVehicleIcon = (vehicleType: string, className?: string) => {
   }
 }
 
-function MapController({
-  center,
-  vehicles,
-  searchRadius,
-}: {
+const clickedLocationIcon = new L.Icon({
+  iconUrl:
+    "data:image/svg+xml;base64," +
+    btoa(`
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#EF4444" width="32px" height="32px">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/>
+  </svg>
+`),
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -32],
+})
+
+const compassIconSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%233B82F6" width="28px" height="28px" style="transform: rotate(var(--heading, 0deg)); transition: transform 0.1s ease-out;">
+  <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 2.99.71-.71L12 2z"/>
+</svg>
+`
+
+function createCompassIcon(heading: number | null): L.DivIcon {
+  const rotation = heading !== null ? heading : 0
+  return L.divIcon({
+    html: `<div style="--heading: ${rotation}deg; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">${compassIconSvg.replace("%233B82F6", "#3B82F6")}</div>`,
+    className: "compass-marker-icon",
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  })
+}
+
+interface MapLogicControllerProps {
   center: [number, number]
-  vehicles: MobilityVehicle[]
-  searchRadius: number
-}) {
+  currentZoom: number
+  onMapInteraction: (newCenter: [number, number], type: "click") => void
+  isFollowingUser?: boolean
+}
+
+function MapLogicController({ center, currentZoom, onMapInteraction, isFollowingUser }: MapLogicControllerProps) {
   const map = useMap()
 
   useEffect(() => {
-    const zoomForRadius = (radius: number): number => {
-      if (radius <= 250) return 17
-      if (radius <= 500) return 16
-      if (radius <= 1000) return 15
-      if (radius <= 2000) return 14
-      if (radius <= 5000) return 13
-      return 12
-    }
-    const maxZoomForFit = 18
-    const leafletCenter: LatLngExpression = [center[0], center[1]]
+    map.whenReady(() => {
+      const leafletCenter: LatLngExpression = [center[0], center[1]]
+      const viewOptions: ZoomPanOptions = { animate: true, duration: 0.3 }
 
-    if (vehicles.length > 0) {
-      const bounds = new L.LatLngBounds()
-      bounds.extend(leafletCenter)
-      vehicles.forEach((vehicle) => {
-        const coords = vehicle.geometry.coordinates
-        const vehicleLatLng: LatLngExpression = [coords[1], coords[0]]
-        bounds.extend(vehicleLatLng)
-      })
-      if (bounds.isValid()) {
-        const southWest = bounds.getSouthWest()
-        const northEast = bounds.getNorthEast()
-        const isEffectivelyPoint = southWest.distanceTo(northEast) < 10
-        if (isEffectivelyPoint && vehicles.length <= 1) {
-          map.setView(leafletCenter, zoomForRadius(searchRadius))
-        } else {
-          map.fitBounds(bounds, { padding: [50, 50], maxZoom: maxZoomForFit })
+      const currentMapCenter = map.getCenter()
+      const currentMapZoom = map.getZoom()
+      const centerChanged =
+        Math.abs(currentMapCenter.lat - center[0]) > 1e-6 || Math.abs(currentMapCenter.lng - center[1]) > 1e-6
+      const zoomChanged = currentMapZoom !== currentZoom
+
+      if (isFollowingUser) {
+        if (map.dragging.enabled()) map.dragging.disable()
+        if (centerChanged || zoomChanged) {
+          map.setView(leafletCenter, currentZoom, viewOptions)
         }
       } else {
-        map.setView(leafletCenter, zoomForRadius(searchRadius))
+        if (!map.dragging.enabled()) map.dragging.enable()
+        if (centerChanged || zoomChanged) {
+          map.setView(leafletCenter, currentZoom, viewOptions)
+        }
       }
-    } else {
-      map.setView(leafletCenter, zoomForRadius(searchRadius))
+    })
+  }, [center, currentZoom, map, isFollowingUser])
+
+  useEffect(() => {
+    const handleClick = (e: LeafletMouseEvent) => {
+      const target = e.originalEvent.target as HTMLElement
+      if (
+        target.closest(".leaflet-marker-icon") ||
+        target.closest(".leaflet-popup-content-wrapper") ||
+        target.closest(".leaflet-popup-tip-container") ||
+        target.closest(".leaflet-control")
+      ) {
+        return
+      }
+      onMapInteraction([e.latlng.lat, e.latlng.lng], "click")
     }
-  }, [center, vehicles, searchRadius, map])
+
+    map.on("click", handleClick)
+    return () => {
+      map.off("click", handleClick)
+    }
+  }, [map, onMapInteraction])
 
   return null
 }
 
 const LeafletMapComponent: React.FC<MapProps> = ({
   center,
-  initialZoom,
+  currentZoom,
   vehicles,
   onVehicleSelect,
   userLocation,
+  clickedLocation,
   searchRadius,
   showRadius,
+  onMapInteraction,
+  deviceHeading,
+  showCompass,
+  isFollowingUser,
 }) => {
   const blueDotOptions = { color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1 }
   const leafletCenter: LatLngExpression = [center[0], center[1]]
   const userLeafletLocation: LatLngExpression | null = userLocation ? [userLocation[0], userLocation[1]] : null
+  const clickedLeafletLocation: LatLngExpression | null = clickedLocation
+    ? [clickedLocation[0], clickedLocation[1]]
+    : null
   const autoPanPaddingValue: PointExpression = [10, 55]
+
+  const compassMarkerRef = useRef<L.Marker | null>(null)
+
+  useEffect(() => {
+    if (compassMarkerRef.current) {
+      if (deviceHeading !== null && showCompass) {
+        const icon = createCompassIcon(deviceHeading)
+        compassMarkerRef.current.setIcon(icon)
+        compassMarkerRef.current.setOpacity(1)
+      } else {
+        compassMarkerRef.current.setOpacity(0)
+      }
+    }
+  }, [deviceHeading, showCompass])
 
   return (
     <MapContainer
       center={leafletCenter}
-      zoom={initialZoom}
-      style={{ height: "100%", width: "100%" }}
+      zoom={currentZoom}
+      style={{ height: "100%", width: "100%", touchAction: "auto" }} // touchAction: auto for better mobile experience
       scrollWheelZoom={true}
+      dragging={!isFollowingUser} // Disable dragging when following user
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <MapController center={center} vehicles={vehicles} searchRadius={searchRadius} />
-      {showRadius && (
-        <Circle
-          center={leafletCenter}
-          radius={searchRadius}
-          pathOptions={{ color: "#3b82f6", fillColor: "#3b82f680", fillOpacity: 0.1, weight: 1 }}
-        />
-      )}
+      <MapLogicController
+        center={center}
+        currentZoom={currentZoom}
+        onMapInteraction={onMapInteraction}
+        isFollowingUser={isFollowingUser}
+      />
+      {showRadius &&
+        center && ( // Ensure center is not null for radius circle
+          <Circle
+            center={leafletCenter}
+            radius={searchRadius}
+            pathOptions={{ color: "#3b82f6", fillColor: "#3b82f680", fillOpacity: 0.1, weight: 1 }}
+          />
+        )}
+
       {userLeafletLocation && (
-        <CircleMarker center={userLeafletLocation} pathOptions={blueDotOptions} radius={8}>
-          <Popup>Ihr aktueller Standort</Popup>
-        </CircleMarker>
+        <>
+          <CircleMarker center={userLeafletLocation} pathOptions={blueDotOptions} radius={8}>
+            <Popup>Ihr aktueller Standort</Popup>
+          </CircleMarker>
+          <Marker
+            position={userLeafletLocation}
+            icon={createCompassIcon(deviceHeading)}
+            ref={compassMarkerRef}
+            keyboard={false} // Disable keyboard interaction for this marker
+            zIndexOffset={1000} // Ensure compass is on top
+            opacity={showCompass && deviceHeading !== null ? 1 : 0} // Control visibility
+          />
+        </>
+      )}
+
+      {clickedLeafletLocation && (
+        <Marker position={clickedLeafletLocation} icon={clickedLocationIcon}>
+          <Popup>Suchzentrum</Popup>
+        </Marker>
       )}
       <LayerGroup>
         {vehicles.map((vehicle) => {
@@ -223,7 +284,6 @@ const LeafletMapComponent: React.FC<MapProps> = ({
           const pricing = providerPricing[provider.name] || providerPricing[provider.name.split(" ")[0]]
           const appStoreLink = provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.store_uri?.[0]
           const customIcon = createCustomMarker(vehicle_type, provider.name)
-
           return (
             <Marker key={vehicle.id} position={vehiclePosition} icon={customIcon}>
               <Popup minWidth={280} autoPanPaddingTopLeft={autoPanPaddingValue} autoPanPaddingBottomRight={[10, 10]}>
