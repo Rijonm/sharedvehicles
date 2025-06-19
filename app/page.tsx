@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
-import { Loader2, AlertCircle, RefreshCw, Info, MapPin, LocateFixed } from "lucide-react" // LocateFixed importiert
+import { Loader2, AlertCircle, RefreshCw, Info } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -25,6 +25,7 @@ const LeafletMap = dynamic(() => import("@/components/map"), {
   ),
 })
 
+// Updated default locations with precise SBB train station coordinates
 const defaultLocations = [
   { name: "Zürich SBB", coords: [47.3779, 8.5402] as [number, number] },
   { name: "Genf SBB", coords: [46.2108, 6.1426] as [number, number] },
@@ -32,11 +33,12 @@ const defaultLocations = [
   { name: "Bern SBB", coords: [46.9498, 7.4391] as [number, number] },
 ]
 
-const FIXED_SEARCH_RADIUS = 400
-const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
+const FIXED_SEARCH_RADIUS = 400 // Search radius set to 400m
+const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275] // Approx. center of Switzerland
 const DEFAULT_MAP_ZOOM_OVERVIEW = 8
-const ACTIVE_SEARCH_ZOOM = 16 // Zoomstufe für aktive Suche (eigener Standort oder gewählter Ort)
+const ACTIVE_SEARCH_INITIAL_ZOOM = 16 // Zoom level for active search (400m radius)
 
+// Updated vehicle type filters based on user input
 const VEHICLE_TYPE_API_FILTERS = [
   "ch.bfe.sharedmobility.vehicle_type=E-Scooter",
   "ch.bfe.sharedmobility.vehicle_type=E-Bike",
@@ -47,132 +49,39 @@ export default function Home() {
   const [vehicles, setVehicles] = useState<MobilityVehicle[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<MobilityVehicle | null>(null)
-  const [location, setLocation] = useState<[number, number] | null>(null) // Aktueller Suchmittelpunkt
-  const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null) // Position des blauen Punkts
-  const [clickedLocationMarker, setClickedLocationMarker] = useState<[number, number] | null>(null)
+  const [location, setLocation] = useState<[number, number] | null>(null)
+  const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null)
   const [locationName, setLocationName] = useState<string>("")
   const [apiError, setApiError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [isHomescreenModalOpen, setIsHomescreenModalOpen] = useState(false)
-  const [deviceHeading, setDeviceHeading] = useState<number | null>(null)
-  const [showCompass, setShowCompass] = useState(false) // Steuert Sichtbarkeit des Kompass-Markers
-  const deviceOrientationListenerAttached = useRef(false)
 
   const { toast } = useToast()
   const mapContainerRef = useRef<HTMLDivElement>(null)
 
-  const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
-    let heading: number | null = null
-    if (event.absolute && typeof event.alpha === "number") {
-      heading = event.alpha
-    } else if (typeof event.webkitCompassHeading === "number") {
-      heading = event.webkitCompassHeading
-    } else if (typeof event.alpha === "number" && !event.absolute) {
-      heading = event.alpha
-    }
-
-    if (heading !== null) {
-      setDeviceHeading((prevHeading) => {
-        if (prevHeading === null || Math.abs(prevHeading - heading!) > 1) {
-          return heading
-        }
-        return prevHeading
-      })
-    }
-  }
-
-  const startDeviceOrientationListener = () => {
-    if (!deviceOrientationListenerAttached.current && window.DeviceOrientationEvent) {
-      // @ts-ignore
-      if (typeof DeviceOrientationEvent.requestPermission === "function") {
-        // @ts-ignore
-        DeviceOrientationEvent.requestPermission()
-          .then((permissionState: string) => {
-            if (permissionState === "granted") {
-              // @ts-ignore
-              window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
-              // @ts-ignore
-              window.addEventListener("deviceorientation", handleDeviceOrientation, true)
-              deviceOrientationListenerAttached.current = true
-              console.log("Device orientation listeners attached after permission grant.")
-            } else {
-              toast({
-                title: "Kompass nicht verfügbar",
-                description: "Zugriff auf Geräteausrichtung verweigert.",
-                variant: "default", // Weniger aufdringlich als destructive
-              })
-            }
-          })
-          .catch((error: any) => {
-            console.error("Error requesting device orientation permission:", error)
-            // Fallback für Browser ohne requestPermission oder bei Fehler
-            // @ts-ignore
-            window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
-            // @ts-ignore
-            window.addEventListener("deviceorientation", handleDeviceOrientation, true)
-            deviceOrientationListenerAttached.current = true
-            console.log("Device orientation listeners attached (fallback).")
-          })
-      } else {
-        // Für Browser, die keine explizite requestPermission API haben
-        // @ts-ignore
-        window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
-        // @ts-ignore
-        window.addEventListener("deviceorientation", handleDeviceOrientation, true)
-        deviceOrientationListenerAttached.current = true
-        console.log("Device orientation listeners attached (no requestPermission API).")
-      }
-    }
-  }
-
-  const stopDeviceOrientationListener = () => {
-    if (deviceOrientationListenerAttached.current && window.DeviceOrientationEvent) {
-      // @ts-ignore
-      window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true)
-      // @ts-ignore
-      window.removeEventListener("deviceorientation", handleDeviceOrientation, true)
-      deviceOrientationListenerAttached.current = false
-      console.log("Device orientation listeners removed.")
-    }
-    setDeviceHeading(null)
-    setShowCompass(false)
-  }
-
-  const clearUserLocationStateAndCompass = () => {
-    setUserLocationMarker(null) // Blauen Punkt entfernen
-    stopDeviceOrientationListener() // Kompass stoppen und ausblenden
-  }
-
   const handleSetCurrentLocation = () => {
     if (navigator.geolocation && window.isSecureContext) {
       setLoading(true)
-      clearUserLocationStateAndCompass() // Vorherigen Zustand ggf. zurücksetzen
-
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
-          setLocation(currentCoords) // Suchmittelpunkt setzen -> löst fetchSpatialVehicles aus
-          setUserLocationMarker(currentCoords) // Blauen Punkt setzen
-          setClickedLocationMarker(null) // Klick-Marker entfernen
-          setLocationName("Mein Standort")
-
-          startDeviceOrientationListener() // Kompass-Listener starten
-          setShowCompass(true) // Kompass-Anzeige auf Karte aktivieren
-
-          setLoading(false)
+          setLocation(currentCoords)
+          setUserLocationMarker(currentCoords)
+          setLocationName("Ihr Standort")
           toast({
-            title: "Standort ermittelt",
-            description: `Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m) werden geladen.`,
+            title: "Standort aktualisiert",
+            description: `Fahrzeuge in Ihrer Nähe (Radius: ${FIXED_SEARCH_RADIUS}m) werden gesucht.`,
           })
         },
         (error) => {
           setLoading(false)
-          clearUserLocationStateAndCompass()
+          setUserLocationMarker(null)
+          setLocation(null)
+          setLocationName("")
           console.log(`Geolocation error (${error.code}): ${error.message}`)
           let description = "Ihr Standort konnte nicht ermittelt werden."
           if (error.code === 1) {
-            description =
-              "Bitte erteilen Sie die Berechtigung, um Ihren Standort und die Geräteausrichtung zu verwenden."
+            description = "Bitte erteilen Sie die Berechtigung, um Ihren Standort zu verwenden."
           }
           toast({
             title: "Standortfehler",
@@ -180,25 +89,21 @@ export default function Home() {
             variant: "destructive",
           })
         },
-        { timeout: 10000, enableHighAccuracy: true },
+        { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 },
       )
     } else {
       setLoading(false)
+      setUserLocationMarker(null)
+      setLocation(null)
+      setLocationName("")
       toast({
         title: "Standort nicht verfügbar",
         description:
-          "Die Geolokalisierung wird von Ihrem Browser nicht unterstützt oder Sie befinden sich in einem unsicheren Kontext (HTTPS erforderlich).",
+          "Die Geolokalisierung wird von Ihrem Browser nicht unterstützt oder Sie befinden sich in einem unsicheren Kontext.",
         variant: "destructive",
       })
     }
   }
-
-  // Cleanup für Kompass-Listener, wenn Komponente unmounted wird
-  useEffect(() => {
-    return () => {
-      stopDeviceOrientationListener()
-    }
-  }, [])
 
   async function fetchVehiclesForType(
     filterValue: string,
@@ -206,10 +111,13 @@ export default function Home() {
     radius: string,
   ): Promise<MobilityVehicle[]> {
     if (!currentLocation || !currentLocation[0] || !currentLocation[1]) return []
+
     const params = new URLSearchParams()
     params.append("Geometry", `${currentLocation[1]},${currentLocation[0]}`)
     params.append("Tolerance", radius)
     params.append("filters", filterValue)
+    // offset=0 is default, limit=50 is default by API
+
     try {
       const response = await fetch(`/api/mobility?${params.toString()}`)
       if (!response.ok) {
@@ -229,20 +137,21 @@ export default function Home() {
     }
   }
 
-  const fetchSpatialVehicles = async (currentSearchLocation: [number, number]) => {
-    if (!currentSearchLocation || !currentSearchLocation[0] || !currentSearchLocation[1]) return
+  const fetchSpatialVehicles = async () => {
+    if (!location || !location[0] || !location[1]) return
 
     setLoading(true)
     setApiError(null)
-    // Fahrzeuge nicht sofort leeren, um Flackern zu vermeiden, wenn nur aktualisiert wird
-    // setVehicles([])
+    setVehicles([])
 
     try {
       const vehiclePromises = VEHICLE_TYPE_API_FILTERS.map((filter) =>
-        fetchVehiclesForType(filter, currentSearchLocation, FIXED_SEARCH_RADIUS.toString()),
+        fetchVehiclesForType(filter, location, FIXED_SEARCH_RADIUS.toString()),
       )
+
       const resultsPerType = await Promise.all(vehiclePromises)
       const combinedVehiclesRaw = resultsPerType.flat()
+
       const uniqueVehiclesMap = new Map<string, MobilityVehicle>()
       combinedVehiclesRaw.forEach((vehicle) => {
         if (!uniqueVehiclesMap.has(vehicle.id)) {
@@ -250,6 +159,7 @@ export default function Home() {
         }
       })
       const finalVehicles = Array.from(uniqueVehiclesMap.values())
+
       setVehicles(finalVehicles)
       setLastUpdated(new Date())
 
@@ -281,39 +191,38 @@ export default function Home() {
 
   useEffect(() => {
     if (location) {
-      fetchSpatialVehicles(location)
+      fetchSpatialVehicles()
+      // Scroll zur Karte, wenn ein Standort ausgewählt wurde
       if (mapContainerRef.current) {
         mapContainerRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
       }
     } else {
-      setVehicles([]) // Leere Fahrzeuge, wenn kein Standort (z.B. initial)
+      setVehicles([])
       setLoading(false)
     }
-  }, [location]) // Abhängigkeit nur von 'location'
+  }, [location])
 
   const handleVehicleSelect = (vehicle: MobilityVehicle) => {
     setSelectedVehicle(vehicle)
   }
 
   const handleLocationSearch = (newLocation: [number, number], name: string) => {
-    clearUserLocationStateAndCompass() // Kompass und blauen Punkt entfernen
     setLoading(true)
-    setLocation(newLocation) // Dies löst den useEffect für fetchSpatialVehicles aus
+    setLocation(newLocation)
     setLocationName(name)
-    setClickedLocationMarker(newLocation) // Klick-Marker für gesuchten Ort setzen
+    setUserLocationMarker(null)
   }
 
   const handleDefaultLocationSelect = (locationData: { name: string; coords: [number, number] }) => {
-    clearUserLocationStateAndCompass() // Kompass und blauen Punkt entfernen
     setLoading(true)
     setLocation(locationData.coords)
     setLocationName(locationData.name)
-    setClickedLocationMarker(null) // Bei Default-Locations keinen expliziten Klick-Marker, Karte zentriert sich eh
+    setUserLocationMarker(null)
   }
 
   const refreshData = () => {
     if (location) {
-      fetchSpatialVehicles(location)
+      fetchSpatialVehicles()
     } else {
       toast({
         title: "Kein Standort ausgewählt",
@@ -324,12 +233,11 @@ export default function Home() {
   }
 
   const useMockData = () => {
-    clearUserLocationStateAndCompass()
     setApiError(null)
     setLoading(true)
     setLocation(null)
     setLocationName("Demo Daten")
-    setClickedLocationMarker(null)
+    setUserLocationMarker(null)
     import("@/mock/mobility-data").then((module) => {
       const allMockVehicles = module.default
       const uniqueVehiclesMap = new Map<string, MobilityVehicle>()
@@ -348,21 +256,6 @@ export default function Home() {
     })
   }
 
-  const handleMapInteractionSearch = (newCenter: [number, number], type: "move" | "click") => {
-    if (type === "click" && selectedVehicle) {
-      setSelectedVehicle(null)
-      return
-    }
-    if (type === "click") {
-      clearUserLocationStateAndCompass() // Kompass und blauen Punkt entfernen
-      setClickedLocationMarker(newCenter) // Klick-Marker für Kartenklick setzen
-      setLocationName("Ausgewählter Punkt")
-      setLocation(newCenter) // Dies löst den useEffect für fetchSpatialVehicles aus
-    }
-  }
-
-  const currentMapZoom = location ? ACTIVE_SEARCH_ZOOM : DEFAULT_MAP_ZOOM_OVERVIEW
-
   return (
     <main className="flex min-h-screen flex-col">
       <div className="container mx-auto px-4 py-6">
@@ -372,6 +265,7 @@ export default function Home() {
             <p className="text-sm text-gray-600 mt-2">Alle Sharing-Anbieter auf einen Blick.</p>
           </div>
           <div className="flex items-center">
+            {/* Info Button - visible ONLY on mobile screens, now smaller */}
             <Button
               variant="ghost"
               size="sm"
@@ -381,12 +275,12 @@ export default function Home() {
             >
               <Info className="h-3.5 w-3.5 text-gray-500" />
             </Button>
+            {/* Desktop Refresh Button - hidden on small screens, visible sm and up */}
             <Button
               variant="outline"
               size="sm"
               onClick={refreshData}
               className="hidden sm:flex items-center gap-1 ml-2"
-              disabled={loading}
             >
               <RefreshCw className="h-4 w-4" />
               Aktualisieren
@@ -394,6 +288,7 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Desktop Last Updated - hidden on small screens, visible sm and up */}
         {lastUpdated && locationName && (
           <p className="text-sm text-muted-foreground mb-4 hidden sm:block">
             Zuletzt aktualisiert: {lastUpdated.toLocaleTimeString()}
@@ -421,17 +316,11 @@ export default function Home() {
               onLocationSearch={handleLocationSearch}
               onSetCurrentLocation={handleSetCurrentLocation}
               defaultLocations={defaultLocations}
-              isUserLocationActive={!!userLocationMarker} // Um den Button-Zustand zu steuern
             />
+            {/* Mobile Refresh Section - visible only on small screens (below sm) */}
             <div className="mt-4 sm:hidden">
               <div className="flex items-center justify-start space-x-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={refreshData}
-                  className="flex items-center gap-1"
-                  disabled={loading}
-                >
+                <Button variant="outline" size="sm" onClick={refreshData} className="flex items-center gap-1">
                   <RefreshCw className="h-4 w-4" />
                   Aktualisieren
                 </Button>
@@ -445,12 +334,7 @@ export default function Home() {
           <div className="md:col-span-3">
             <div className="rounded-lg overflow-hidden border h-[70vh] relative" ref={mapContainerRef}>
               {locationName && !loading && (
-                <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium flex items-center">
-                  {userLocationMarker && <LocateFixed className="h-4 w-4 mr-1.5 text-blue-500" />}
-                  {clickedLocationMarker && <MapPin className="h-4 w-4 mr-1.5 text-red-500" />}
-                  {!userLocationMarker && !clickedLocationMarker && location && (
-                    <MapPin className="h-4 w-4 mr-1.5 text-gray-500" />
-                  )}
+                <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium">
                   {`${locationName} • ${FIXED_SEARCH_RADIUS}m Radius`}
                   <Badge variant="secondary" className="ml-2">
                     {vehicles.length} Fahrzeuge
@@ -465,16 +349,12 @@ export default function Home() {
               )}
               <LeafletMap
                 center={location || DEFAULT_MAP_CENTER}
-                currentZoom={currentMapZoom} // Umbenannt von initialZoom zu currentZoom für Klarheit
+                initialZoom={location ? ACTIVE_SEARCH_INITIAL_ZOOM : DEFAULT_MAP_ZOOM_OVERVIEW}
                 vehicles={vehicles}
                 onVehicleSelect={handleVehicleSelect}
-                searchRadius={FIXED_SEARCH_RADIUS}
+                searchRadius={location ? FIXED_SEARCH_RADIUS : 50000}
                 userLocation={userLocationMarker}
-                clickedLocation={clickedLocationMarker}
                 showRadius={!!location}
-                onMapInteraction={handleMapInteractionSearch}
-                deviceHeading={deviceHeading}
-                showCompass={showCompass}
               />
             </div>
 
@@ -486,6 +366,8 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Add to Homescreen Modal */}
       <AddToHomescreenModal open={isHomescreenModalOpen} onOpenChange={setIsHomescreenModalOpen} />
     </main>
   )
