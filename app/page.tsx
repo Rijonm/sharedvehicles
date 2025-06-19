@@ -36,7 +36,6 @@ const FIXED_SEARCH_RADIUS = 400
 const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
 const DEFAULT_MAP_ZOOM_OVERVIEW = 8
 const ACTIVE_SEARCH_ZOOM = 16 // Consistent zoom for active searches
-const USER_FOLLOW_ZOOM = 17 // Zoom level when map is following user
 
 const VEHICLE_TYPE_API_FILTERS = [
   "ch.bfe.sharedmobility.vehicle_type=E-Scooter",
@@ -423,7 +422,15 @@ export default function Home() {
           </div>
 
           <div className="md:col-span-3">
-            <div className="rounded-lg overflow-hidden border h-[70vh] relative" ref={mapContainerRef}>
+            {/* Map container with touch isolation */}
+            <div
+              className="rounded-lg overflow-hidden border h-[70vh] relative"
+              ref={mapContainerRef}
+              style={{
+                touchAction: "none", // Prevent all default touch behaviors on the container
+                WebkitOverflowScrolling: "touch", // Better iOS scrolling
+              }}
+            >
               {locationName && !loading && (
                 <div className="absolute top-2 right-2 z-[1000] bg-white dark:bg-gray-800 px-3 py-1 rounded-md shadow-md text-sm font-medium flex items-center">
                   {isUserTrackingActive && userLocationMarker && (
@@ -457,7 +464,6 @@ export default function Home() {
                 onMapInteraction={handleMapInteractionSearch}
                 deviceHeading={deviceHeading}
                 showCompass={showCompass}
-                // Removed isFollowingUser prop - map dragging is always enabled now
               />
             </div>
 

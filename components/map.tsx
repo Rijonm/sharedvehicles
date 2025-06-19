@@ -186,6 +186,60 @@ function MapLogicController({ center, currentZoom, onMapInteraction }: MapLogicC
   return null
 }
 
+// Touch Event Handler Component
+function TouchEventHandler() {
+  const map = useMap()
+  const mapContainerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const mapContainer = map.getContainer()
+    mapContainerRef.current = mapContainer
+
+    const preventPageScroll = (e: TouchEvent) => {
+      // Prevent the default behavior (page scrolling) when touching the map
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Prevent page scroll when touch starts on map
+      e.stopPropagation()
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      // Prevent page scroll during touch move on map
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      // Prevent page scroll when touch ends on map
+      e.stopPropagation()
+    }
+
+    if (mapContainer) {
+      // Add touch event listeners with passive: false to allow preventDefault
+      mapContainer.addEventListener("touchstart", handleTouchStart, { passive: false })
+      mapContainer.addEventListener("touchmove", handleTouchMove, { passive: false })
+      mapContainer.addEventListener("touchend", handleTouchEnd, { passive: false })
+
+      // Also prevent scroll events from bubbling up
+      mapContainer.addEventListener("scroll", preventPageScroll, { passive: false })
+    }
+
+    return () => {
+      if (mapContainer) {
+        mapContainer.removeEventListener("touchstart", handleTouchStart)
+        mapContainer.removeEventListener("touchmove", handleTouchMove)
+        mapContainer.removeEventListener("touchend", handleTouchEnd)
+        mapContainer.removeEventListener("scroll", preventPageScroll)
+      }
+    }
+  }, [map])
+
+  return null
+}
+
 const LeafletMapComponent: React.FC<MapProps> = ({
   center,
   currentZoom,
@@ -225,18 +279,26 @@ const LeafletMapComponent: React.FC<MapProps> = ({
     <MapContainer
       center={leafletCenter}
       zoom={currentZoom}
-      style={{ height: "100%", width: "100%", touchAction: "pan-y pinch-zoom" }} // Better touch handling
+      style={{
+        height: "100%",
+        width: "100%",
+        touchAction: "none", // Prevent all default touch behaviors
+        position: "relative",
+        overflow: "hidden", // Ensure no scrollbars appear
+      }}
       scrollWheelZoom={true}
-      dragging={true} // Always enable dragging
+      dragging={true}
       touchZoom={true}
       doubleClickZoom={true}
       zoomControl={true}
+      attributionControl={true}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <MapLogicController center={center} currentZoom={currentZoom} onMapInteraction={onMapInteraction} />
+      <TouchEventHandler />
       {showRadius && center && (
         <Circle
           center={leafletCenter}
