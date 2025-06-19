@@ -171,14 +171,19 @@ function MapLogicController({ center, currentZoom, onMapInteraction, isFollowing
   useEffect(() => {
     const handleClick = (e: LeafletMouseEvent) => {
       const target = e.originalEvent.target as HTMLElement
+
+      // Check if click was on a vehicle marker, popup, or control
       if (
         target.closest(".leaflet-marker-icon") ||
         target.closest(".leaflet-popup-content-wrapper") ||
         target.closest(".leaflet-popup-tip-container") ||
         target.closest(".leaflet-control")
       ) {
+        // Click was on a marker, popup, or control - don't trigger map interaction
         return
       }
+
+      // Click was on empty map area - trigger map interaction
       onMapInteraction([e.latlng.lat, e.latlng.lng], "click")
     }
 
@@ -285,7 +290,16 @@ const LeafletMapComponent: React.FC<MapProps> = ({
           const appStoreLink = provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.store_uri?.[0]
           const customIcon = createCustomMarker(vehicle_type, provider.name)
           return (
-            <Marker key={vehicle.id} position={vehiclePosition} icon={customIcon}>
+            <Marker
+              key={vehicle.id}
+              position={vehiclePosition}
+              icon={customIcon}
+              eventHandlers={{
+                click: () => {
+                  onVehicleSelect(vehicle) // This will set the selectedVehicle in the parent
+                },
+              }}
+            >
               <Popup minWidth={280} autoPanPaddingTopLeft={autoPanPaddingValue} autoPanPaddingBottomRight={[10, 10]}>
                 <div className="p-1 space-y-2 text-xs">
                   <div className="flex items-center gap-2">

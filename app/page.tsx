@@ -339,11 +339,13 @@ export default function Home() {
 
   const handleMapInteractionSearch = (newCenter: [number, number], type: "click") => {
     if (type === "click") {
+      // If a vehicle detail is open, first click should only close it
       if (selectedVehicle) {
         setSelectedVehicle(null) // Close detail view
-        return // Don't search yet
+        return // Don't search yet, wait for next click
       }
-      // Detail view is closed, proceed with search
+
+      // No detail view is open, proceed with search at clicked location
       stopUserTracking() // Stop "Mein Standort" mode if active
       setLoading(true)
       setSearchCenter(newCenter)
