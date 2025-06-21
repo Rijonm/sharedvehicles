@@ -11,7 +11,6 @@ interface MobilityFiltersProps {
   onLocationSearch: (location: [number, number], name: string) => void
   onSetCurrentLocation: () => void
   defaultLocations: { name: string; coords: [number, number] }[]
-  isUserLocationActive: boolean // New prop
 }
 
 interface Suggestion {
@@ -27,7 +26,6 @@ export default function MobilityFilters({
   onLocationSearch,
   onSetCurrentLocation,
   defaultLocations,
-  isUserLocationActive, // Use this prop
 }: MobilityFiltersProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -37,14 +35,17 @@ export default function MobilityFilters({
 
   const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "")
 
+  // Debounced fetch for autocomplete suggestions from Swisstopo API
   useEffect(() => {
     if (searchQuery.length < 3) {
       setSuggestions([])
       setIsSuggestionsVisible(false)
       return
     }
+
     const handler = setTimeout(async () => {
       try {
+        // Using Swisstopo API for stable Swiss geocoding
         const response = await fetch(
           `https://api3.geo.admin.ch/rest/services/api/SearchServer?type=locations&origins=address,gg25&limit=5&searchText=${encodeURIComponent(
             searchQuery,
@@ -61,12 +62,14 @@ export default function MobilityFilters({
         console.error("Error fetching suggestions:", error)
         setSuggestions([])
       }
-    }, 300)
+    }, 300) // 300ms delay
+
     return () => {
       clearTimeout(handler)
     }
   }, [searchQuery])
 
+  // Handle clicks outside to close suggestions
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
@@ -88,6 +91,7 @@ export default function MobilityFilters({
       })
       return
     }
+
     try {
       const response = await fetch(
         `https://api3.geo.admin.ch/rest/services/api/SearchServer?type=locations&origins=address,gg25&limit=1&searchText=${encodeURIComponent(
@@ -95,10 +99,11 @@ export default function MobilityFilters({
         )}`,
       )
       const data = await response.json()
+
       if (data.results && data.results.length > 0) {
         const { lat, lon, label } = data.results[0].attrs
         const displayName = stripHtml(label)
-        setSearchQuery(displayName) // Update search query with the selected name
+        setSearchQuery(displayName)
         setIsSuggestionsVisible(false)
         onLocationSearch([lat, lon], displayName)
         toast({
@@ -125,7 +130,7 @@ export default function MobilityFilters({
   const handleSuggestionClick = (suggestion: Suggestion) => {
     const { lat, lon, label } = suggestion.attrs
     const displayName = stripHtml(label)
-    setSearchQuery(displayName) // Update search query with the selected name
+    setSearchQuery(displayName)
     setIsSuggestionsVisible(false)
     onLocationSearch([lat, lon], displayName)
     toast({
@@ -173,13 +178,9 @@ export default function MobilityFilters({
           )}
         </div>
 
-        <Button
-          onClick={onSetCurrentLocation}
-          variant={isUserLocationActive ? "default" : "outline"} // Change variant based on active state
-          className="w-full mt-2 flex items-center gap-2"
-        >
-          <LocateFixed className={`h-4 w-4 ${isUserLocationActive ? "text-white" : ""}`} />
-          {isUserLocationActive ? "Mein Standort aktiv" : "Mein Standort"}
+        <Button onClick={onSetCurrentLocation} variant="outline" className="w-full mt-2 flex items-center gap-2">
+          <LocateFixed className="h-4 w-4" />
+          Mein Standort
         </Button>
 
         <Card className="mt-4">
@@ -194,12 +195,9 @@ export default function MobilityFilters({
                 <Button
                   key={location.name}
                   variant="outline"
-                  size="sm"
-                  className="w-full justify-start text-xs px-2 py-1 h-auto"
-                  onClick={() => {
-                    // setSearchQuery(location.name); // Do not set search query for default locations
-                    onLocationSearch(location.coords, location.name)
-                  }}
+                  size="sm" // Behalte sm für die allgemeine Struktur, aber überschreibe Textgröße und Padding
+                  className="w-full justify-start text-xs px-2 py-1 h-auto" // Kleinere Schrift und Padding
+                  onClick={() => onLocationSearch(location.coords, location.name)}
                 >
                   {location.name}
                 </Button>
