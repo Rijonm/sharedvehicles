@@ -339,7 +339,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
       tapMarkerRef.current = null
     }
 
-    if (vehicles.length > 0 && userLocation !== null) {
+    if (vehicles.length > 0) {
       // Smart tight zoom: snap to street level if any vehicle is within 200 m,
       // otherwise show all results capped at zoom 16 so the user has spatial context.
       const anyClose = vehicles.some((v) => distanceToVehicle(center, v) <= TIGHT_ZONE_RADIUS_M)
