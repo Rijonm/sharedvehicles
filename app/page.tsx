@@ -238,6 +238,7 @@ export default function Home() {
             onTypeToggle={handleTypeToggle}
             searchRadius={searchRadius}
             onRadiusChange={handleRadiusChange}
+            currentCoords={location}
           />
         </div>
       </div>

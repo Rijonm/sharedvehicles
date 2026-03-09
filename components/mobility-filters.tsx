@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { MapPin, Search, Navigation, ChevronDown } from "lucide-react"
+import { MapPin, Search, Navigation, ChevronDown, Star } from "lucide-react"
 import { searchLocationSuggestions, searchLocation } from "@/lib/api"
 
 interface MobilityFiltersProps {
@@ -15,6 +15,7 @@ interface MobilityFiltersProps {
   onTypeToggle: (type: string) => void
   searchRadius: number
   onRadiusChange: (r: number) => void
+  currentCoords: [number, number] | null
 }
 
 interface Suggestion {
@@ -28,6 +29,14 @@ interface Suggestion {
 
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "")
 
+const FAVORITES_KEY = "myrideradar_favorites"
+function loadFavorites(): { name: string; coords: [number, number] }[] {
+  try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]") } catch { return [] }
+}
+function saveFavorites(favs: { name: string; coords: [number, number] }[]) {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs))
+}
+
 export default function MobilityFilters({
   onLocationSearch,
   onSetCurrentLocation,
@@ -37,12 +46,14 @@ export default function MobilityFilters({
   onTypeToggle,
   searchRadius,
   onRadiusChange,
+  currentCoords,
 }: MobilityFiltersProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [isSuggestionsVisible, setIsSuggestionsVisible] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
+  const [favorites, setFavorites] = useState<{ name: string; coords: [number, number] }[]>([])
   const searchContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -77,6 +88,8 @@ export default function MobilityFilters({
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  useEffect(() => { setFavorites(loadFavorites()) }, [])
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) return
@@ -220,6 +233,42 @@ export default function MobilityFilters({
                 <span>1km</span>
               </div>
             </div>
+
+            {/* Save Favorite Button */}
+            {locationName && !defaultLocations.some(l => l.name === locationName) && (
+              <button
+                onClick={() => {
+                  if (!currentCoords) return
+                  const newFav = { name: locationName, coords: currentCoords }
+                  const updated = [newFav, ...favorites.filter(f => f.name !== locationName)].slice(0, 5)
+                  setFavorites(updated)
+                  saveFavorites(updated)
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-apple text-left"
+              >
+                <div className="w-8 h-8 rounded-full bg-yellow-50 dark:bg-yellow-900/20 flex items-center justify-center shrink-0">
+                  <Star className="h-4 w-4 text-yellow-500" />
+                </div>
+                <p className="text-sm font-medium">Als Favorit speichern</p>
+              </button>
+            )}
+
+            {/* Favorites */}
+            {favorites.length > 0 && (
+              <div className="px-4 pt-2 pb-1">
+                <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-2">Favoriten</p>
+                <div className="flex flex-wrap gap-2">
+                  {favorites.map((fav) => (
+                    <button key={fav.name}
+                      onClick={() => { setIsExpanded(false); setIsFocused(false); onLocationSearch(fav.coords, fav.name) }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-yellow-50 dark:bg-yellow-900/20 text-xs font-medium transition-apple">
+                      <Star className="h-3 w-3 text-yellow-500" />
+                      {fav.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Quick Locations */}
             <div className="px-4 pt-2 pb-3">
