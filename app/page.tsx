@@ -11,6 +11,8 @@ import dynamic from "next/dynamic"
 import type { MobilityVehicle } from "@/types/mobility"
 import { convertEsriJsonToMobilityVehicle } from "@/utils/converters"
 import { fetchMobilityVehicles } from "@/lib/api"
+import { useLocale } from "@/hooks/useLocale"
+import { t } from "@/lib/i18n"
 
 const LeafletMap = dynamic(() => import("@/components/map"), {
   ssr: false,
@@ -55,6 +57,7 @@ export default function Home() {
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["E-Scooter", "E-Bike", "Car"]))
   const [searchRadius, setSearchRadius] = useState(DEFAULT_SEARCH_RADIUS)
 
+  const { locale, setLocale } = useLocale()
   const { toast } = useToast()
 
   const handleTypeToggle = useCallback((type: string) => {
@@ -81,26 +84,26 @@ export default function Home() {
           const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
           setLocation(currentCoords)
           setUserLocationMarker(currentCoords)
-          setLocationName("Mein Standort")
+          setLocationName(t(locale, "myLocation"))
         },
         (error) => {
           setLoading(false)
-          let description = "Standort konnte nicht ermittelt werden."
+          let description = t(locale, "locationErrorDesc")
           if (error.code === 1) {
-            description = "Bitte erlaube den Zugriff auf deinen Standort."
+            description = t(locale, "locationDenied")
           }
-          toast({ title: "Standortfehler", description, variant: "destructive" })
+          toast({ title: t(locale, "locationError"), description, variant: "destructive" })
         },
         { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 },
       )
     } else {
       toast({
-        title: "Nicht verfügbar",
-        description: "Standortdienste werden nicht unterstützt.",
+        title: t(locale, "locationUnavailable"),
+        description: t(locale, "locationUnavailableDesc"),
         variant: "destructive",
       })
     }
-  }, [toast])
+  }, [toast, locale])
 
   const handleMapTapLocation = useCallback((coords: [number, number]) => {
     setLocation(coords)
@@ -159,15 +162,15 @@ export default function Home() {
 
       if (finalVehicles.length === 0) {
         toast({
-          title: "Keine Fahrzeuge",
-          description: `Keine Fahrzeuge im Umkreis von ${searchRadius}m gefunden.`,
+          title: t(locale, "noVehicles"),
+          description: t(locale, "noVehiclesDesc", { radius: searchRadius.toString() }),
         })
       }
     } catch (error) {
       if (controller.signal.aborted) return
       toast({
-        title: "Fehler",
-        description: "Fahrzeuge konnten nicht geladen werden.",
+        title: t(locale, "fetchError"),
+        description: t(locale, "fetchErrorDesc"),
         variant: "destructive",
       })
     } finally {
@@ -175,7 +178,7 @@ export default function Home() {
         setLoading(false)
       }
     }
-  }, [location, fetchVehiclesForType, toast, activeTypes])
+  }, [location, fetchVehiclesForType, toast, activeTypes, locale])
 
   useEffect(() => {
     if (location) {
@@ -216,6 +219,7 @@ export default function Home() {
           searchRadius={location ? searchRadius : 50000}
           userLocation={userLocationMarker}
           showRadius={!!location}
+          locale={locale}
         />
       </div>
 
@@ -224,7 +228,7 @@ export default function Home() {
         <div className="absolute inset-0 z-[500] flex items-center justify-center bg-background/40 backdrop-blur-sm animate-fade-in">
           <div className="glass rounded-2xl px-6 py-4 shadow-lg flex items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <span className="text-sm font-medium">Fahrzeuge werden gesucht...</span>
+            <span className="text-sm font-medium">{t(locale, "loading")}</span>
           </div>
         </div>
       )}
@@ -244,6 +248,8 @@ export default function Home() {
             searchRadius={searchRadius}
             onRadiusChange={handleRadiusChange}
             currentCoords={location}
+            locale={locale}
+            onLocaleChange={setLocale}
           />
         </div>
       </div>
@@ -253,14 +259,14 @@ export default function Home() {
         <div className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[500] animate-fade-in">
           <div className="glass rounded-full px-4 py-2 shadow-md flex items-center gap-2 text-sm">
             <span className="font-medium">{vehicles.length}</span>
-            <span className="text-muted-foreground">Fahrzeuge</span>
+            <span className="text-muted-foreground">{t(locale, "vehiclesFound")}</span>
             <span className="text-muted-foreground/50">·</span>
             <span className="text-muted-foreground">{searchRadius}m</span>
             {lastUpdated && (
               <button
                 onClick={refreshData}
                 className="ml-1 p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-apple"
-                aria-label="Aktualisieren"
+                aria-label={t(locale, "refresh")}
               >
                 <RotateCw className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
@@ -274,7 +280,7 @@ export default function Home() {
         <button
           onClick={handleSetCurrentLocation}
           className="glass w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:bg-white/90 dark:hover:bg-black/60 transition-apple active:scale-95"
-          aria-label="Mein Standort"
+          aria-label={t(locale, "myLocation")}
         >
           <Navigation className="h-5 w-5 text-primary" />
         </button>
@@ -283,7 +289,7 @@ export default function Home() {
       {/* Vehicle Details Bottom Sheet */}
       {selectedVehicle && (
         <div className="absolute bottom-0 left-0 right-0 z-[700] safe-area-bottom">
-          <VehicleDetails vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} />
+          <VehicleDetails vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} locale={locale} />
         </div>
       )}
     </main>

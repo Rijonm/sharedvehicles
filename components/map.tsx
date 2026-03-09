@@ -9,6 +9,7 @@ import "leaflet.markercluster/dist/MarkerCluster.css"
 import "leaflet.markercluster/dist/MarkerCluster.Default.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { getProviderInfo } from "@/lib/providers"
+import { t, type Locale } from "@/lib/i18n"
 
 interface MapProps {
   center: [number, number]
@@ -19,6 +20,7 @@ interface MapProps {
   userLocation: [number, number] | null
   searchRadius: number
   showRadius: boolean
+  locale: Locale
 }
 
 function createVehicleIcon(vehicleType: string, providerName: string): L.DivIcon {
@@ -65,7 +67,7 @@ function zoomForRadius(r: number): number {
   return 13
 }
 
-function buildPopupHtml(vehicle: MobilityVehicle): string {
+function buildPopupHtml(vehicle: MobilityVehicle, locale: Locale): string {
   const { properties } = vehicle
   const { provider, station, vehicle_type, available } = properties
   const info = getProviderInfo(provider.name)
@@ -81,8 +83,8 @@ function buildPopupHtml(vehicle: MobilityVehicle): string {
     : ""
 
   const statusBadge = available
-    ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#ecfdf5;color:#059669;">Verfügbar</span>`
-    : `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#fef2f2;color:#ef4444;">Belegt</span>`
+    ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#ecfdf5;color:#059669;">${t(locale, "available")}</span>`
+    : `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#fef2f2;color:#ef4444;">${t(locale, "occupied")}</span>`
 
   let stationHtml = ""
   if (station) {
@@ -90,7 +92,7 @@ function buildPopupHtml(vehicle: MobilityVehicle): string {
       <div style="background:#f9fafb;border-radius:12px;padding:10px;margin:10px 0;">
         <p style="font-size:12px;font-weight:500;margin:0;">${station.name}</p>
         ${station.address ? `<p style="font-size:11px;color:#6b7280;margin:2px 0 0;">${station.address}</p>` : ""}
-        ${station.status?.num_vehicle_available != null ? `<p style="font-size:11px;color:#6b7280;margin:4px 0 0;">${station.status.num_vehicle_available} verfügbar</p>` : ""}
+        ${station.status?.num_vehicle_available != null ? `<p style="font-size:11px;color:#6b7280;margin:4px 0 0;">${station.status.num_vehicle_available} ${t(locale, "stationVehicles")}</p>` : ""}
       </div>`
   }
 
@@ -109,7 +111,7 @@ function buildPopupHtml(vehicle: MobilityVehicle): string {
     buttonHtml = `
       <a href="${appLink}" target="_blank" rel="noopener noreferrer"
          style="display:block;text-align:center;padding:10px;border-radius:12px;color:white;font-size:12px;font-weight:600;text-decoration:none;margin-top:10px;background:${color};">
-        Jetzt mieten
+        ${t(locale, "openInApp")}
       </a>`
   }
 
@@ -146,6 +148,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   userLocation,
   searchRadius,
   showRadius,
+  locale,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -155,11 +158,16 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   const userPulseRef = useRef<L.CircleMarker | null>(null)
   const tapMarkerRef = useRef<L.Marker | null>(null)
   const onMapTapLocationRef = useRef(onMapTapLocation)
+  const localeRef = useRef(locale)
 
   // Keep callback ref up to date
   useEffect(() => {
     onMapTapLocationRef.current = onMapTapLocation
   }, [onMapTapLocation])
+
+  useEffect(() => {
+    localeRef.current = locale
+  }, [locale])
 
   // Initialize map once
   useEffect(() => {
@@ -208,12 +216,12 @@ const LeafletMapComponent: React.FC<MapProps> = ({
         .addTo(map)
         .bindPopup(
           `<div style="padding:8px;font-family:-apple-system,sans-serif;text-align:center;">
-            <p style="font-size:13px;font-weight:600;margin:0 0 8px;">Hier suchen?</p>
+            <p style="font-size:13px;font-weight:600;margin:0 0 8px;">${t(localeRef.current, "searchHere")}</p>
             <button id="tap-confirm-btn" style="
               background:hsl(211,100%,50%);color:white;border:none;
               padding:8px 20px;border-radius:10px;font-size:12px;font-weight:600;
               cursor:pointer;width:100%;
-            ">Fahrzeuge suchen</button>
+            ">${t(localeRef.current, "searchHereConfirm")}</button>
           </div>`,
           { className: "custom-popup", minWidth: 160 },
         )
@@ -333,10 +341,10 @@ const LeafletMapComponent: React.FC<MapProps> = ({
         weight: 3,
         radius: 7,
       })
-        .bindPopup("Dein Standort")
+        .bindPopup(t(locale, "myLocationLabel"))
         .addTo(map)
     }
-  }, [userLocation])
+  }, [userLocation, locale])
 
   // Update vehicle markers
   useEffect(() => {
@@ -360,7 +368,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
       }
 
       const marker = L.marker(pos, { icon })
-        .bindPopup(buildPopupHtml(vehicle), {
+        .bindPopup(buildPopupHtml(vehicle, locale), {
           minWidth: 260,
           maxWidth: 300,
           className: "custom-popup",
@@ -369,7 +377,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
 
       layer.addLayer(marker)
     })
-  }, [vehicles, onVehicleSelect])
+  }, [vehicles, onVehicleSelect, locale])
 
   return <div ref={containerRef} style={{ height: "100%", width: "100%" }} />
 }
