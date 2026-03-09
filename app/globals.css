@@ -225,6 +225,32 @@
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+/* PWA install prompt animations */
+@keyframes slide-up-spring {
+  from {
+    transform: translateY(64px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pwa-step-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pwa-card-enter {
+  animation: slide-up-spring 300ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.pwa-step {
+  opacity: 0;
+  animation: pwa-step-fade 200ms ease forwards;
+}
+
 /* Pulse animation for location dot */
 @keyframes pulse-ring {
   0% {
@@ -338,4 +364,9 @@ input[type="range"]::-moz-range-thumb {
 
 .dark .loading-overlay {
   background: radial-gradient(ellipse at center, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.3) 100%);
+}
+
+.custom-cluster-marker {
+  background: none !important;
+  border: none !important;
 }

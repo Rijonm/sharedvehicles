@@ -9,6 +9,7 @@ export const translations = {
     favorites: "Favoriten",
     saveFavorite: "Als Favorit speichern",
     vehicleType: "Fahrzeugtyp",
+    brandFilter: "Anbieter",
     searchRadius: "Suchradius",
     scooter: "Scooter",
     bike: "Bike",
@@ -46,6 +47,7 @@ export const translations = {
     swisspass: "SwissPass",
     selectedPlace: "Gewählter Ort",
     expand: "Erweitern",
+    brandFilterEmpty: "Kein Anbieter passt zum Filter",
   },
   fr: {
     searchPlaceholder: "Rechercher un lieu...",
@@ -55,6 +57,7 @@ export const translations = {
     favorites: "Favoris",
     saveFavorite: "Enregistrer comme favori",
     vehicleType: "Type de véhicule",
+    brandFilter: "Prestataires",
     searchRadius: "Rayon de recherche",
     scooter: "Trottinette",
     bike: "Vélo",
@@ -92,6 +95,7 @@ export const translations = {
     swisspass: "SwissPass",
     selectedPlace: "Lieu sélectionné",
     expand: "Agrandir",
+    brandFilterEmpty: "Aucun prestataire ne correspond au filtre",
   },
   it: {
     searchPlaceholder: "Cerca un luogo...",
@@ -101,6 +105,7 @@ export const translations = {
     favorites: "Preferiti",
     saveFavorite: "Salva come preferito",
     vehicleType: "Tipo di veicolo",
+    brandFilter: "Fornitori",
     searchRadius: "Raggio di ricerca",
     scooter: "Monopattino",
     bike: "Bici",
@@ -138,6 +143,7 @@ export const translations = {
     swisspass: "SwissPass",
     selectedPlace: "Luogo selezionato",
     expand: "Espandi",
+    brandFilterEmpty: "Nessun fornitore corrisponde al filtro",
   },
 } as const
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import "leaflet/dist/leaflet.css"
 import MobilityFilters from "@/components/mobility-filters"
 import VehicleDetails from "@/components/vehicle-details"
@@ -13,6 +13,9 @@ import { convertEsriJsonToMobilityVehicle } from "@/utils/converters"
 import { fetchMobilityVehicles } from "@/lib/api"
 import { useLocale } from "@/hooks/useLocale"
 import { t } from "@/lib/i18n"
+import { getProviderInfo } from "@/lib/providers"
+
+const PwaInstallPrompt = dynamic(() => import("@/components/pwa-install-prompt"), { ssr: false })
 
 const LeafletMap = dynamic(() => import("@/components/map"), {
   ssr: false,
@@ -37,7 +40,7 @@ const defaultLocations = [
 
 const DEFAULT_SEARCH_RADIUS = 400
 const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
-const DEFAULT_MAP_ZOOM_OVERVIEW = 8
+const DEFAULT_MAP_ZOOM_OVERVIEW = 10
 const ACTIVE_SEARCH_INITIAL_ZOOM = 16
 
 const VEHICLE_TYPE_API_FILTERS = [
@@ -55,12 +58,22 @@ export default function Home() {
   const [locationName, setLocationName] = useState<string>("")
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["E-Scooter", "E-Bike", "Car"]))
+  const [activeBrands, setActiveBrands] = useState<Set<string>>(new Set())
   const [searchRadius, setSearchRadius] = useState(DEFAULT_SEARCH_RADIUS)
 
   const { locale, setLocale } = useLocale()
   const localeRef = useRef(locale)
   useEffect(() => { localeRef.current = locale }, [locale])
   const { toast } = useToast()
+
+  const handleBrandToggle = useCallback((brand: string) => {
+    setActiveBrands((prev) => {
+      const next = new Set(prev)
+      if (next.has(brand)) next.delete(brand)
+      else next.add(brand)
+      return next
+    })
+  }, [])
 
   const handleTypeToggle = useCallback((type: string) => {
     setActiveTypes((prev) => {
@@ -81,6 +94,11 @@ export default function Home() {
     if (radiusDebounceRef.current) clearTimeout(radiusDebounceRef.current)
     radiusDebounceRef.current = setTimeout(() => setCommittedRadius(r), 450)
   }, [])
+
+  // Reset brand filter on new location search
+  useEffect(() => {
+    setActiveBrands(new Set())
+  }, [location])
 
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -112,6 +130,14 @@ export default function Home() {
       })
     }
   }, [toast])
+
+  // Auto-locate on first mount
+  const hasMounted = useRef(false)
+  useEffect(() => {
+    if (hasMounted.current) return
+    hasMounted.current = true
+    handleSetCurrentLocation()
+  }, [handleSetCurrentLocation])
 
   const handleMapTapLocation = useCallback((coords: [number, number]) => {
     setLocation(coords)
@@ -202,6 +228,23 @@ export default function Home() {
     }
   }, [location, fetchSpatialVehicles])
 
+  const availableBrands = useMemo(() => {
+    const seen = new Map<string, { name: string; color: string; logo?: string }>()
+    vehicles.forEach((v) => {
+      const name = v.properties.provider.name
+      if (!seen.has(name)) {
+        const info = getProviderInfo(name)
+        seen.set(name, { name, color: info.color, logo: info.logo })
+      }
+    })
+    return Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [vehicles])
+
+  const displayVehicles = useMemo(
+    () => (activeBrands.size === 0 ? vehicles : vehicles.filter((v) => activeBrands.has(v.properties.provider.name))),
+    [vehicles, activeBrands],
+  )
+
   const handleLocationSearch = useCallback((newLocation: [number, number], name: string) => {
     setLocation(newLocation)
     setLocationName(name)
@@ -221,7 +264,7 @@ export default function Home() {
         <LeafletMap
           center={location || DEFAULT_MAP_CENTER}
           initialZoom={location ? ACTIVE_SEARCH_INITIAL_ZOOM : DEFAULT_MAP_ZOOM_OVERVIEW}
-          vehicles={vehicles}
+          vehicles={displayVehicles}
           onVehicleSelect={setSelectedVehicle}
           onMapTapLocation={handleMapTapLocation}
           searchRadius={location ? searchRadius : 50000}
@@ -251,6 +294,9 @@ export default function Home() {
             locationName={locationName}
             activeTypes={activeTypes}
             onTypeToggle={handleTypeToggle}
+            availableBrands={availableBrands}
+            activeBrands={activeBrands}
+            onBrandToggle={handleBrandToggle}
             searchRadius={searchRadius}
             onRadiusChange={handleRadiusChange}
             currentCoords={location}
@@ -261,10 +307,10 @@ export default function Home() {
       </div>
 
       {/* Status Pill */}
-      {locationName && !loading && vehicles.length > 0 && (
+      {locationName && !loading && displayVehicles.length > 0 && (
         <div className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[500] animate-fade-in-scale">
           <div className="glass rounded-full pl-1.5 pr-4 py-1.5 shadow-lg flex items-center gap-2.5 text-sm">
-            <span className="status-count">{vehicles.length}</span>
+            <span className="status-count">{displayVehicles.length}</span>
             <span className="text-muted-foreground font-medium">{t(locale, "vehiclesFound")}</span>
             <span className="text-muted-foreground/30 font-light">|</span>
             <span className="text-muted-foreground/70 tabular-nums font-medium">{searchRadius}m</span>
@@ -281,6 +327,15 @@ export default function Home() {
         </div>
       )}
 
+      {/* Brand filter empty state */}
+      {locationName && !loading && activeBrands.size > 0 && vehicles.length > 0 && displayVehicles.length === 0 && (
+        <div className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[500] animate-fade-in-scale">
+          <div className="glass rounded-full px-4 py-1.5 shadow-lg text-sm text-muted-foreground font-medium">
+            {t(locale, "brandFilterEmpty")}
+          </div>
+        </div>
+      )}
+
       {/* GPS Floating Button - bottom right */}
       <div className="absolute bottom-6 right-4 z-[600] safe-area-bottom">
         <button
@@ -291,6 +346,9 @@ export default function Home() {
           <Navigation className="h-5 w-5 text-primary" />
         </button>
       </div>
+
+      {/* PWA Install Prompt */}
+      <PwaInstallPrompt hasResults={vehicles.length > 0} />
 
       {/* Vehicle Details Bottom Sheet */}
       {selectedVehicle && (

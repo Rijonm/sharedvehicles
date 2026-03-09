@@ -67,6 +67,19 @@ function zoomForRadius(r: number): number {
   return 13
 }
 
+const TIGHT_ZONE_RADIUS_M = 200
+
+/** Euclidean distance in metres between Leaflet center [lat,lng] and a vehicle's GeoJSON coordinates [lng,lat]. */
+function distanceToVehicle(center: [number, number], vehicle: MobilityVehicle): number {
+  const cLat = center[0]
+  const cLng = center[1]
+  const vLat = vehicle.geometry.coordinates[1]  // GeoJSON is [lng, lat]
+  const vLng = vehicle.geometry.coordinates[0]
+  const dLat = (vLat - cLat) * 111320
+  const dLng = (vLng - cLng) * 111320 * Math.cos((cLat * Math.PI) / 180)
+  return Math.sqrt(dLat * dLat + dLng * dLng)
+}
+
 function buildPopupHtml(vehicle: MobilityVehicle, locale: Locale): string {
   const { properties } = vehicle
   const { provider, station, vehicle_type, available } = properties
@@ -191,11 +204,65 @@ const LeafletMapComponent: React.FC<MapProps> = ({
       spiderfyOnMaxZoom: true,
       iconCreateFunction: (cluster) => {
         const count = cluster.getChildCount()
+        const children = cluster.getAllChildMarkers() as (L.Marker & { _provider?: string })[]
+
+        // Collect unique providers in encounter order
+        const seen = new Set<string>()
+        const uniqueProviders: string[] = []
+        for (const m of children) {
+          if (m._provider && !seen.has(m._provider)) {
+            seen.add(m._provider)
+            uniqueProviders.push(m._provider)
+          }
+        }
+
+        const MAX_LOGOS = 3
+        const LOGO_SIZE = 20
+        const OVERLAP = 5
+        const shown = uniqueProviders.slice(0, MAX_LOGOS)
+        const extraCount = uniqueProviders.length - shown.length
+
+        // Build logo HTML items
+        const logoItems: string[] = shown.map((name, i) => {
+          const info = getProviderInfo(name)
+          const ml = i === 0 ? "0px" : `-${OVERLAP}px`
+          if (info.logo) {
+            return `<div style="width:${LOGO_SIZE}px;height:${LOGO_SIZE}px;border-radius:50%;overflow:hidden;border:1.5px solid white;margin-left:${ml};flex-shrink:0;background:white;">
+        <img src="${info.logo}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+      </div>`
+          }
+          return `<div style="width:${LOGO_SIZE}px;height:${LOGO_SIZE}px;border-radius:50%;border:1.5px solid white;margin-left:${ml};flex-shrink:0;background:${info.color};display:flex;align-items:center;justify-content:center;">
+      <span style="color:white;font-size:7px;font-weight:800;line-height:1;">${info.shortName.slice(0, 2).toUpperCase()}</span>
+    </div>`
+        })
+
+        if (extraCount > 0) {
+          logoItems.push(
+            `<div style="width:${LOGO_SIZE}px;height:${LOGO_SIZE}px;border-radius:50%;border:1.5px solid white;margin-left:-${OVERLAP}px;flex-shrink:0;background:#e5e7eb;display:flex;align-items:center;justify-content:center;">
+        <span style="color:#374151;font-size:7px;font-weight:800;line-height:1;">+${extraCount}</span>
+      </div>`
+          )
+        }
+
+        const logosHtml = logoItems.join("")
+
+        // Approximate pill width for Leaflet iconSize/iconAnchor
+        const nItems = shown.length + (extraCount > 0 ? 1 : 0)
+        const logoAreaW = nItems > 0 ? LOGO_SIZE + (nItems - 1) * (LOGO_SIZE - OVERLAP) : 0
+        const countW = String(count).length <= 2 ? 16 : 22
+        const pillW = 8 + logoAreaW + 4 + countW + 8
+        const pillH = 30
+
         return L.divIcon({
-          html: `<div style="width:36px;height:36px;background:hsl(211,100%,50%);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2.5px solid white;box-shadow:0 2px 8px rgba(0,122,255,0.3);color:white;font-size:12px;font-weight:700;font-family:-apple-system,sans-serif;">${count}</div>`,
+          html: `<div style="display:inline-flex;align-items:center;background:white;border-radius:${pillH / 2}px;padding:5px 7px 5px 5px;box-shadow:0 2px 8px rgba(0,0,0,0.15),0 0 0 1px rgba(0,0,0,0.06);white-space:nowrap;">
+      <div style="display:flex;align-items:center;">
+        ${logosHtml}
+      </div>
+      <span style="font-size:11px;font-weight:700;color:#111;margin-left:4px;font-family:-apple-system,sans-serif;letter-spacing:-0.3px;">${count}</span>
+    </div>`,
           className: "custom-cluster-marker",
-          iconSize: [36, 36],
-          iconAnchor: [18, 18],
+          iconSize: [pillW, pillH],
+          iconAnchor: [Math.round(pillW / 2), Math.round(pillH / 2)],
         })
       },
     }).addTo(map)
@@ -273,14 +340,17 @@ const LeafletMapComponent: React.FC<MapProps> = ({
     }
 
     if (vehicles.length > 0) {
-      const bounds = L.latLngBounds([leafletCenter])
-      vehicles.forEach((v) => {
-        bounds.extend([v.geometry.coordinates[1], v.geometry.coordinates[0]])
-      })
-      if (bounds.isValid() && bounds.getSouthWest().distanceTo(bounds.getNorthEast()) > 10) {
-        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 })
+      // Smart tight zoom: snap to street level if any vehicle is within 200 m,
+      // otherwise show all results capped at zoom 16 so the user has spatial context.
+      const anyClose = vehicles.some((v) => distanceToVehicle(center, v) <= TIGHT_ZONE_RADIUS_M)
+      if (anyClose) {
+        map.setView(leafletCenter, 17)
       } else {
-        map.setView(leafletCenter, zoomForRadius(searchRadius))
+        const bounds = L.latLngBounds([leafletCenter])
+        vehicles.forEach((v) => {
+          bounds.extend([v.geometry.coordinates[1], v.geometry.coordinates[0]])
+        })
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 })
       }
     } else {
       map.setView(leafletCenter, zoomForRadius(searchRadius))
@@ -374,6 +444,8 @@ const LeafletMapComponent: React.FC<MapProps> = ({
           className: "custom-popup",
         })
         .on("click", () => onVehicleSelect(vehicle))
+
+      ;(marker as L.Marker & { _provider: string })._provider = provider.name
 
       layer.addLayer(marker)
     })
