@@ -235,9 +235,9 @@ const LeafletMapComponent: React.FC<MapProps> = ({
 
         // Approximate pill width for Leaflet iconSize/iconAnchor
         const nItems = shown.length + (extraCount > 0 ? 1 : 0)
-        const logoAreaW = LOGO_SIZE + (nItems - 1) * (LOGO_SIZE - OVERLAP)
+        const logoAreaW = nItems > 0 ? LOGO_SIZE + (nItems - 1) * (LOGO_SIZE - OVERLAP) : 0
         const countW = String(count).length <= 2 ? 16 : 22
-        const pillW = 6 + logoAreaW + 4 + countW + 6
+        const pillW = 8 + logoAreaW + 4 + countW + 8
         const pillH = 30
 
         return L.divIcon({

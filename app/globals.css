@@ -339,3 +339,8 @@ input[type="range"]::-moz-range-thumb {
 .dark .loading-overlay {
   background: radial-gradient(ellipse at center, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.3) 100%);
 }
+
+.custom-cluster-marker {
+  background: none !important;
+  border: none !important;
+}
