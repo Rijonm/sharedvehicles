@@ -13,6 +13,8 @@ interface MobilityFiltersProps {
   lastUpdated: Date | null
   activeTypes: Set<string>
   onTypeToggle: (type: string) => void
+  searchRadius: number
+  onRadiusChange: (r: number) => void
 }
 
 interface Suggestion {
@@ -33,6 +35,8 @@ export default function MobilityFilters({
   locationName,
   activeTypes,
   onTypeToggle,
+  searchRadius,
+  onRadiusChange,
 }: MobilityFiltersProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -191,6 +195,29 @@ export default function MobilityFilters({
                     {label}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Search Radius */}
+            <div className="px-4 pt-2 pb-3 border-t border-black/5 dark:border-white/5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                  Suchradius
+                </p>
+                <span className="text-xs font-semibold text-primary">{searchRadius}m</span>
+              </div>
+              <input
+                type="range"
+                min={150}
+                max={1000}
+                step={50}
+                value={searchRadius}
+                onChange={(e) => onRadiusChange(Number(e.target.value))}
+                className="w-full accent-primary"
+              />
+              <div className="flex justify-between text-[10px] text-muted-foreground/50 mt-1">
+                <span>150m</span>
+                <span>1km</span>
               </div>
             </div>
 

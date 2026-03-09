@@ -33,7 +33,7 @@ const defaultLocations = [
   { name: "St. Gallen", coords: [47.4245, 9.3767] as [number, number] },
 ]
 
-const FIXED_SEARCH_RADIUS = 400
+const DEFAULT_SEARCH_RADIUS = 400
 const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
 const DEFAULT_MAP_ZOOM_OVERVIEW = 8
 const ACTIVE_SEARCH_INITIAL_ZOOM = 16
@@ -53,6 +53,7 @@ export default function Home() {
   const [locationName, setLocationName] = useState<string>("")
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["E-Scooter", "E-Bike", "Car"]))
+  const [searchRadius, setSearchRadius] = useState(DEFAULT_SEARCH_RADIUS)
 
   const { toast } = useToast()
 
@@ -67,6 +68,9 @@ export default function Home() {
       return next
     })
   }, [])
+
+  const handleRadiusChange = useCallback((r: number) => setSearchRadius(r), [])
+
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const handleSetCurrentLocation = useCallback(() => {
@@ -107,10 +111,10 @@ export default function Home() {
   const fetchVehiclesForType = useCallback(
     async (filterValue: string, currentLocation: [number, number], signal: AbortSignal): Promise<MobilityVehicle[]> => {
       const geometry = `${currentLocation[1]},${currentLocation[0]}`
-      const data = await fetchMobilityVehicles(geometry, FIXED_SEARCH_RADIUS.toString(), filterValue, signal)
+      const data = await fetchMobilityVehicles(geometry, searchRadius.toString(), filterValue, signal)
       return data.map(convertEsriJsonToMobilityVehicle)
     },
-    [],
+    [searchRadius],
   )
 
   const fetchSpatialVehicles = useCallback(async () => {
@@ -151,7 +155,7 @@ export default function Home() {
       if (finalVehicles.length === 0) {
         toast({
           title: "Keine Fahrzeuge",
-          description: `Keine Fahrzeuge im Umkreis von ${FIXED_SEARCH_RADIUS}m gefunden.`,
+          description: `Keine Fahrzeuge im Umkreis von ${searchRadius}m gefunden.`,
         })
       }
     } catch (error) {
@@ -204,7 +208,7 @@ export default function Home() {
           vehicles={vehicles}
           onVehicleSelect={setSelectedVehicle}
           onMapTapLocation={handleMapTapLocation}
-          searchRadius={location ? FIXED_SEARCH_RADIUS : 50000}
+          searchRadius={location ? searchRadius : 50000}
           userLocation={userLocationMarker}
           showRadius={!!location}
         />
@@ -232,6 +236,8 @@ export default function Home() {
             lastUpdated={lastUpdated}
             activeTypes={activeTypes}
             onTypeToggle={handleTypeToggle}
+            searchRadius={searchRadius}
+            onRadiusChange={handleRadiusChange}
           />
         </div>
       </div>
@@ -243,7 +249,7 @@ export default function Home() {
             <span className="font-medium">{vehicles.length}</span>
             <span className="text-muted-foreground">Fahrzeuge</span>
             <span className="text-muted-foreground/50">·</span>
-            <span className="text-muted-foreground">{FIXED_SEARCH_RADIUS}m</span>
+            <span className="text-muted-foreground">{searchRadius}m</span>
             {lastUpdated && (
               <button
                 onClick={refreshData}
