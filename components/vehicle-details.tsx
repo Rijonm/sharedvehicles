@@ -1,7 +1,7 @@
 "use client"
 
 import type { MobilityVehicle } from "@/types/mobility"
-import { MapPin, Phone, CreditCard, ExternalLink, X, ChevronUp } from "lucide-react"
+import { MapPin, Phone, CreditCard, ExternalLink, X, ChevronUp, Navigation } from "lucide-react"
 import { useState } from "react"
 import { getProviderInfo } from "@/lib/providers"
 
@@ -130,7 +130,7 @@ export default function VehicleDetails({ vehicle, onClose }: VehicleDetailsProps
             </div>
           )}
 
-          {/* Action Button */}
+          {/* Action Buttons */}
           {appLink && (
             <a
               href={appLink}
@@ -143,6 +143,20 @@ export default function VehicleDetails({ vehicle, onClose }: VehicleDetailsProps
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
+          {(() => {
+            const [lon, lat] = vehicle.geometry.coordinates
+            const isIosNav = typeof window !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent)
+            const navUrl = isIosNav
+              ? `https://maps.apple.com/?daddr=${lat},${lon}&dirflg=w`
+              : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`
+            return (
+              <a href={navUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full mt-2 py-3 rounded-2xl text-sm font-semibold border border-border bg-secondary/60 hover:bg-secondary transition-apple active:scale-[0.98]">
+                <Navigation className="h-3.5 w-3.5" />
+                Zu Fuss navigieren
+              </a>
+            )
+          })()}
         </div>
       </div>
     </div>
