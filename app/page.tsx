@@ -95,14 +95,6 @@ export default function Home() {
     radiusDebounceRef.current = setTimeout(() => setCommittedRadius(r), 450)
   }, [])
 
-  // Auto-locate on first mount
-  const hasMounted = useRef(false)
-  useEffect(() => {
-    if (hasMounted.current) return
-    hasMounted.current = true
-    handleSetCurrentLocation()
-  }, [handleSetCurrentLocation])
-
   // Reset brand filter on new location search
   useEffect(() => {
     setActiveBrands(new Set())
@@ -138,6 +130,14 @@ export default function Home() {
       })
     }
   }, [toast])
+
+  // Auto-locate on first mount
+  const hasMounted = useRef(false)
+  useEffect(() => {
+    if (hasMounted.current) return
+    hasMounted.current = true
+    handleSetCurrentLocation()
+  }, [handleSetCurrentLocation])
 
   const handleMapTapLocation = useCallback((coords: [number, number]) => {
     setLocation(coords)
