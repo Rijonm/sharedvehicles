@@ -56,7 +56,7 @@ export default function VehicleDetails({ vehicle, onClose, locale }: VehicleDeta
                   <span className="text-xs text-muted-foreground font-medium">{vehicle_type}</span>
                   {info.swisspass && (
                     <span className="badge-swisspass text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                      SwissPass
+                      {t(locale, "swisspass")}
                     </span>
                   )}
                   <span

@@ -44,6 +44,8 @@ export const translations = {
     language: "Sprache / Langue / Lingua",
     stationVehicles: "Fahrzeuge verfügbar",
     swisspass: "SwissPass",
+    selectedPlace: "Gewählter Ort",
+    expand: "Erweitern",
   },
   fr: {
     searchPlaceholder: "Rechercher un lieu...",
@@ -88,6 +90,8 @@ export const translations = {
     language: "Sprache / Langue / Lingua",
     stationVehicles: "véhicules disponibles",
     swisspass: "SwissPass",
+    selectedPlace: "Lieu sélectionné",
+    expand: "Agrandir",
   },
   it: {
     searchPlaceholder: "Cerca un luogo...",
@@ -132,6 +136,8 @@ export const translations = {
     language: "Sprache / Langue / Lingua",
     stationVehicles: "veicoli disponibili",
     swisspass: "SwissPass",
+    selectedPlace: "Luogo selezionato",
+    expand: "Espandi",
   },
 } as const
 

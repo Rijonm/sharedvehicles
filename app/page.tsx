@@ -20,7 +20,7 @@ const LeafletMap = dynamic(() => import("@/components/map"), {
     <div className="flex h-full items-center justify-center bg-muted/20">
       <div className="flex flex-col items-center gap-4">
         <div className="w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin" />
-        <span className="text-sm font-medium text-muted-foreground/60">Karte wird geladen...</span>
+        <span className="text-sm font-medium text-muted-foreground/60">···</span>
       </div>
     </div>
   ),
@@ -58,6 +58,8 @@ export default function Home() {
   const [searchRadius, setSearchRadius] = useState(DEFAULT_SEARCH_RADIUS)
 
   const { locale, setLocale } = useLocale()
+  const localeRef = useRef(locale)
+  useEffect(() => { localeRef.current = locale }, [locale])
   const { toast } = useToast()
 
   const handleTypeToggle = useCallback((type: string) => {
@@ -84,30 +86,30 @@ export default function Home() {
           const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
           setLocation(currentCoords)
           setUserLocationMarker(currentCoords)
-          setLocationName(t(locale, "myLocation"))
+          setLocationName(t(localeRef.current, "myLocation"))
         },
         (error) => {
           setLoading(false)
-          let description = t(locale, "locationErrorDesc")
+          let description = t(localeRef.current, "locationErrorDesc")
           if (error.code === 1) {
-            description = t(locale, "locationDenied")
+            description = t(localeRef.current, "locationDenied")
           }
-          toast({ title: t(locale, "locationError"), description, variant: "destructive" })
+          toast({ title: t(localeRef.current, "locationError"), description, variant: "destructive" })
         },
         { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 },
       )
     } else {
       toast({
-        title: t(locale, "locationUnavailable"),
-        description: t(locale, "locationUnavailableDesc"),
+        title: t(localeRef.current, "locationUnavailable"),
+        description: t(localeRef.current, "locationUnavailableDesc"),
         variant: "destructive",
       })
     }
-  }, [toast, locale])
+  }, [toast])
 
   const handleMapTapLocation = useCallback((coords: [number, number]) => {
     setLocation(coords)
-    setLocationName("Gewählter Ort")
+    setLocationName(t(localeRef.current, "selectedPlace"))
     setUserLocationMarker(null)
   }, [])
 
@@ -162,15 +164,15 @@ export default function Home() {
 
       if (finalVehicles.length === 0) {
         toast({
-          title: t(locale, "noVehicles"),
-          description: t(locale, "noVehiclesDesc", { radius: searchRadius.toString() }),
+          title: t(localeRef.current, "noVehicles"),
+          description: t(localeRef.current, "noVehiclesDesc", { radius: searchRadius.toString() }),
         })
       }
     } catch (error) {
       if (controller.signal.aborted) return
       toast({
-        title: t(locale, "fetchError"),
-        description: t(locale, "fetchErrorDesc"),
+        title: t(localeRef.current, "fetchError"),
+        description: t(localeRef.current, "fetchErrorDesc"),
         variant: "destructive",
       })
     } finally {
@@ -178,7 +180,7 @@ export default function Home() {
         setLoading(false)
       }
     }
-  }, [location, fetchVehiclesForType, toast, activeTypes, locale])
+  }, [location, fetchVehiclesForType, toast, activeTypes])
 
   useEffect(() => {
     if (location) {

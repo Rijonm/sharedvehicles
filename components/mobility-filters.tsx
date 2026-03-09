@@ -166,7 +166,7 @@ export default function MobilityFilters({
                 inputRef.current?.focus()
               }}
               className="p-1.5 -mr-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-apple active:scale-95"
-              aria-label="Erweitern"
+              aria-label={t(locale, "expand")}
             >
               <ChevronDown className="h-4 w-4 text-muted-foreground/50" />
             </button>
@@ -333,7 +333,7 @@ export default function MobilityFilters({
                 index > 0 ? "border-t border-black/[0.04] dark:border-white/[0.06]" : ""
               }`}
             >
-              <div className="w-8 h-8 rounded-full bg-primary/8 flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-full bg-primary/[0.08] flex items-center justify-center shrink-0">
                 <MapPin className="h-4 w-4 text-primary/70" />
               </div>
               <p className="text-sm font-medium truncate">{stripHtml(suggestion.attrs.label)}</p>
