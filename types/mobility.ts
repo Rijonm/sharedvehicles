@@ -13,9 +13,11 @@ export interface MobilityVehicle {
       apps: {
         ios?: {
           store_uri?: string[]
+          discovery_uri?: string
         }
         android?: {
           store_uri?: string[]
+          discovery_uri?: string
         }
       }
     }
@@ -95,6 +97,8 @@ export interface EsriJsonAttributes {
   provider_timezone: string
   provider_apps_ios_store_uri?: string
   provider_apps_android_store_uri?: string
+  provider_apps_ios_discovery_uri?: string
+  provider_apps_android_discovery_uri?: string
   id: string
   available: boolean
   pickup_type: string
@@ -126,10 +130,16 @@ export function convertEsriJsonToMobilityVehicle(feature: EsriJsonFeature): Mobi
 
   const providerApps: MobilityVehicle["properties"]["provider"]["apps"] = {}
   if (attributes.provider_apps_ios_store_uri) {
-    providerApps.ios = { store_uri: [attributes.provider_apps_ios_store_uri] }
+    providerApps.ios = {
+      store_uri: [attributes.provider_apps_ios_store_uri],
+      discovery_uri: attributes.provider_apps_ios_discovery_uri,
+    }
   }
   if (attributes.provider_apps_android_store_uri) {
-    providerApps.android = { store_uri: [attributes.provider_apps_android_store_uri] }
+    providerApps.android = {
+      store_uri: [attributes.provider_apps_android_store_uri],
+      discovery_uri: attributes.provider_apps_android_discovery_uri,
+    }
   }
 
   let stationData: MobilityVehicle["properties"]["station"] | undefined = undefined
