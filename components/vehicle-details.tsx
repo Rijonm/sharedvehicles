@@ -115,6 +115,9 @@ export default function VehicleDetails({ vehicle, onClose }: VehicleDetailsProps
                     <span className="text-muted-foreground mx-2">·</span>
                     <span className="text-muted-foreground">Pro Minute </span>
                     <span className="font-medium">{pricing.minute} CHF</span>
+                    <p className="text-[10px] text-muted-foreground/60 mt-1">
+                      *Richtpreise, können je nach Region und Mitgliedschaft abweichen
+                    </p>
                   </div>
                 </div>
               )}
