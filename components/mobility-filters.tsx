@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { MapPin, Search, Navigation, ChevronDown, Star } from "lucide-react"
+import { MapPin, Search, Navigation, ChevronDown, ChevronUp, Star, X } from "lucide-react"
 import { searchLocationSuggestions, searchLocation } from "@/lib/api"
+import { getProviderInfo } from "@/lib/providers"
 import { t } from "@/lib/i18n"
 import type { Locale } from "@/lib/i18n"
 
@@ -21,6 +22,7 @@ interface MobilityFiltersProps {
   currentCoords: [number, number] | null
   locale: Locale
   onLocaleChange: (l: Locale) => void
+  onExpandedChange?: (expanded: boolean) => void
 }
 
 interface Suggestion {
@@ -57,6 +59,7 @@ export default function MobilityFilters({
   currentCoords,
   locale,
   onLocaleChange,
+  onExpandedChange,
 }: MobilityFiltersProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -91,13 +94,14 @@ export default function MobilityFilters({
     function handleClickOutside(event: MouseEvent) {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setIsSuggestionsVisible(false)
+        if (isExpanded) onExpandedChange?.(false)
         setIsExpanded(false)
         setIsFocused(false)
       }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
+  }, [isExpanded, onExpandedChange])
 
   useEffect(() => { setFavorites(loadFavorites()) }, [])
 
@@ -110,6 +114,7 @@ export default function MobilityFilters({
       setIsSuggestionsVisible(false)
       setIsExpanded(false)
       setIsFocused(false)
+      onExpandedChange?.(false)
       onLocationSearch([result.lat, result.lon], result.label)
     }
   }
@@ -121,12 +126,14 @@ export default function MobilityFilters({
     setIsSuggestionsVisible(false)
     setIsExpanded(false)
     setIsFocused(false)
+    onExpandedChange?.(false)
     onLocationSearch([lat, lon], displayName)
   }
 
   const handleCurrentLocation = () => {
     setIsExpanded(false)
     setIsFocused(false)
+    onExpandedChange?.(false)
     onSetCurrentLocation()
   }
 
@@ -150,6 +157,7 @@ export default function MobilityFilters({
             onFocus={() => {
               setIsFocused(true)
               setIsExpanded(true)
+              onExpandedChange?.(true)
               if (searchQuery.length > 2) setIsSuggestionsVisible(true)
             }}
             onKeyDown={(e) => {
@@ -157,16 +165,31 @@ export default function MobilityFilters({
               if (e.key === "Escape") {
                 setIsFocused(false)
                 setIsExpanded(false)
+                onExpandedChange?.(false)
                 inputRef.current?.blur()
               }
             }}
             className="flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground/40 tracking-[-0.01em]"
             autoComplete="off"
           />
-          {!isFocused && !isExpanded && (
+          {isExpanded ? (
+            <button
+              onClick={() => {
+                setIsExpanded(false)
+                setIsFocused(false)
+                onExpandedChange?.(false)
+                inputRef.current?.blur()
+              }}
+              className="p-1.5 -mr-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-apple active:scale-95"
+              aria-label={t(locale, "close")}
+            >
+              <ChevronUp className="h-4 w-4 text-muted-foreground/50" />
+            </button>
+          ) : !isFocused ? (
             <button
               onClick={() => {
                 setIsExpanded(true)
+                onExpandedChange?.(true)
                 inputRef.current?.focus()
               }}
               className="p-1.5 -mr-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-apple active:scale-95"
@@ -174,7 +197,7 @@ export default function MobilityFilters({
             >
               <ChevronDown className="h-4 w-4 text-muted-foreground/50" />
             </button>
-          )}
+          ) : null}
         </div>
 
         {/* Expanded Panel */}
@@ -230,6 +253,7 @@ export default function MobilityFilters({
                 <div className="flex flex-wrap gap-2">
                   {availableBrands.map(({ name, color, logo }) => {
                     const isActive = activeBrands.has(name)
+                    const displayName = getProviderInfo(name).shortName
                     return (
                       <button
                         key={name}
@@ -242,11 +266,11 @@ export default function MobilityFilters({
                         style={isActive ? { backgroundColor: color, ringColor: color } : {}}
                       >
                         {logo ? (
-                          <img src={logo} alt={name} className="w-4 h-4 rounded object-cover" />
+                          <img src={logo} alt={displayName} className="w-4 h-4 rounded object-cover" />
                         ) : (
                           <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                         )}
-                        {name}
+                        {displayName}
                       </button>
                     )
                   })}
@@ -302,12 +326,26 @@ export default function MobilityFilters({
                 <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mb-2">{t(locale, "favorites")}</p>
                 <div className="flex flex-wrap gap-2">
                   {favorites.map((fav) => (
-                    <button key={fav.name}
-                      onClick={() => { setIsExpanded(false); setIsFocused(false); onLocationSearch(fav.coords, fav.name) }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-xs font-semibold transition-apple hover:bg-amber-100 dark:hover:bg-amber-500/15 active:scale-[0.97] ring-1 ring-amber-200/50 dark:ring-amber-500/20">
-                      <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
-                      {fav.name}
-                    </button>
+                    <div key={fav.name} className="inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200/50 dark:ring-amber-500/20">
+                      <button
+                        onClick={() => { setIsExpanded(false); setIsFocused(false); onExpandedChange?.(false); onLocationSearch(fav.coords, fav.name) }}
+                        className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 text-xs font-semibold transition-apple hover:bg-amber-100 dark:hover:bg-amber-500/15 active:scale-[0.97] rounded-l-full">
+                        <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+                        {fav.name}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const updated = favorites.filter(f => f.name !== fav.name)
+                          setFavorites(updated)
+                          saveFavorites(updated)
+                        }}
+                        className="p-1 mr-1 rounded-full hover:bg-amber-200/50 dark:hover:bg-amber-500/20 transition-apple active:scale-90"
+                        aria-label={t(locale, "removeFavorite")}
+                      >
+                        <X className="h-3 w-3 text-amber-500/70" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -325,6 +363,7 @@ export default function MobilityFilters({
                     onClick={() => {
                       setIsExpanded(false)
                       setIsFocused(false)
+                      onExpandedChange?.(false)
                       onLocationSearch(loc.coords, loc.name)
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/80 hover:bg-secondary text-xs font-semibold transition-apple active:scale-[0.97] ring-1 ring-black/[0.04] dark:ring-white/[0.06]"

@@ -48,6 +48,7 @@ export const translations = {
     selectedPlace: "Gewählter Ort",
     expand: "Erweitern",
     brandFilterEmpty: "Kein Anbieter passt zum Filter",
+    removeFavorite: "Favorit entfernen",
   },
   fr: {
     searchPlaceholder: "Rechercher un lieu...",
@@ -96,6 +97,7 @@ export const translations = {
     selectedPlace: "Lieu sélectionné",
     expand: "Agrandir",
     brandFilterEmpty: "Aucun prestataire ne correspond au filtre",
+    removeFavorite: "Supprimer le favori",
   },
   it: {
     searchPlaceholder: "Cerca un luogo...",
@@ -144,6 +146,7 @@ export const translations = {
     selectedPlace: "Luogo selezionato",
     expand: "Espandi",
     brandFilterEmpty: "Nessun fornitore corrisponde al filtro",
+    removeFavorite: "Rimuovi preferito",
   },
 } as const
 

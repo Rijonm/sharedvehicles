@@ -60,11 +60,39 @@ export default function Home() {
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["E-Scooter", "E-Bike", "Car"]))
   const [activeBrands, setActiveBrands] = useState<Set<string>>(new Set())
   const [searchRadius, setSearchRadius] = useState(DEFAULT_SEARCH_RADIUS)
+  const filterExpandedRef = useRef(false)
+  const selectedVehicleRef = useRef<MobilityVehicle | null>(null)
+  const mapClickSuppressedRef = useRef(false)
 
   const { locale, setLocale } = useLocale()
   const localeRef = useRef(locale)
   useEffect(() => { localeRef.current = locale }, [locale])
   const { toast } = useToast()
+
+  // Keep selectedVehicleRef in sync
+  useEffect(() => { selectedVehicleRef.current = selectedVehicle }, [selectedVehicle])
+
+  const handleFilterExpandedChange = useCallback((expanded: boolean) => {
+    filterExpandedRef.current = expanded
+    if (!expanded) {
+      // Filter just closed — suppress the next map click so no tap marker appears
+      mapClickSuppressedRef.current = true
+      setTimeout(() => { mapClickSuppressedRef.current = false }, 300)
+    }
+  }, [])
+
+  const handleMapClickCheck = useCallback((): boolean => {
+    // Returns true if the map should proceed with tap marker, false if click was consumed
+    if (mapClickSuppressedRef.current) {
+      mapClickSuppressedRef.current = false
+      return false
+    }
+    if (selectedVehicleRef.current) {
+      setSelectedVehicle(null)
+      return false
+    }
+    return true
+  }, [])
 
   const handleBrandToggle = useCallback((brand: string) => {
     setActiveBrands((prev) => {
@@ -271,6 +299,7 @@ export default function Home() {
           userLocation={userLocationMarker}
           showRadius={!!location}
           locale={locale}
+          onMapClickCheck={handleMapClickCheck}
         />
       </div>
 
@@ -302,6 +331,7 @@ export default function Home() {
             currentCoords={location}
             locale={locale}
             onLocaleChange={setLocale}
+            onExpandedChange={handleFilterExpandedChange}
           />
         </div>
       </div>

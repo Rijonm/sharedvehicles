@@ -21,6 +21,7 @@ interface MapProps {
   searchRadius: number
   showRadius: boolean
   locale: Locale
+  onMapClickCheck?: () => boolean
 }
 
 function createVehicleIcon(vehicleType: string, providerName: string): L.DivIcon {
@@ -162,6 +163,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   searchRadius,
   showRadius,
   locale,
+  onMapClickCheck,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -171,12 +173,17 @@ const LeafletMapComponent: React.FC<MapProps> = ({
   const userPulseRef = useRef<L.CircleMarker | null>(null)
   const tapMarkerRef = useRef<L.Marker | null>(null)
   const onMapTapLocationRef = useRef(onMapTapLocation)
+  const onMapClickCheckRef = useRef(onMapClickCheck)
   const localeRef = useRef(locale)
 
-  // Keep callback ref up to date
+  // Keep callback refs up to date
   useEffect(() => {
     onMapTapLocationRef.current = onMapTapLocation
   }, [onMapTapLocation])
+
+  useEffect(() => {
+    onMapClickCheckRef.current = onMapClickCheck
+  }, [onMapClickCheck])
 
   useEffect(() => {
     localeRef.current = locale
@@ -270,6 +277,16 @@ const LeafletMapComponent: React.FC<MapProps> = ({
     // Tap-to-place: click on map → dismiss existing marker, or show new one
     map.on("click", (e: L.LeafletMouseEvent) => {
       const { lat, lng } = e.latlng
+
+      // Check if an overlay consumed this click (filter panel / vehicle details)
+      if (onMapClickCheckRef.current && !onMapClickCheckRef.current()) {
+        // Click was consumed — dismiss any existing tap marker too
+        if (tapMarkerRef.current) {
+          tapMarkerRef.current.remove()
+          tapMarkerRef.current = null
+        }
+        return
+      }
 
       // If a tap marker exists, just dismiss it and return
       if (tapMarkerRef.current) {
