@@ -24,6 +24,10 @@ export default function VehicleDetails({ vehicle, onClose, locale }: VehicleDeta
   const appLink = isIos
     ? (provider.apps?.ios?.discovery_uri || provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.discovery_uri || provider.apps?.android?.store_uri?.[0])
     : (provider.apps?.android?.discovery_uri || provider.apps?.android?.store_uri?.[0] || provider.apps?.ios?.discovery_uri || provider.apps?.ios?.store_uri?.[0])
+  const [lon, lat] = vehicle.geometry.coordinates
+  const navUrl = isIos
+    ? `https://maps.apple.com/?daddr=${lat},${lon}&dirflg=w`
+    : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`
 
   return (
     <div className="animate-slide-up">
@@ -168,20 +172,11 @@ export default function VehicleDetails({ vehicle, onClose, locale }: VehicleDeta
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
-          {(() => {
-            const [lon, lat] = vehicle.geometry.coordinates
-            const isIosNav = typeof window !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent)
-            const navUrl = isIosNav
-              ? `https://maps.apple.com/?daddr=${lat},${lon}&dirflg=w`
-              : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`
-            return (
-              <a href={navUrl} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full mt-2 py-3.5 rounded-2xl text-sm font-semibold border border-border bg-secondary/60 hover:bg-secondary transition-apple active:scale-[0.98]">
-                <Navigation className="h-3.5 w-3.5" />
-                {t(locale, "navigateOnFoot")}
-              </a>
-            )
-          })()}
+          <a href={navUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full mt-2 py-3.5 rounded-2xl text-sm font-semibold border border-border bg-secondary/60 hover:bg-secondary transition-apple active:scale-[0.98]">
+            <Navigation className="h-3.5 w-3.5" />
+            {t(locale, "navigateOnFoot")}
+          </a>
         </div>
       </div>
     </div>

@@ -11,8 +11,6 @@ interface MobilityFiltersProps {
   onSetCurrentLocation: () => void
   defaultLocations: { name: string; coords: [number, number] }[]
   locationName: string
-  vehicleCount: number
-  lastUpdated: Date | null
   activeTypes: Set<string>
   onTypeToggle: (type: string) => void
   searchRadius: number

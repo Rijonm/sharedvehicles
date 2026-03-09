@@ -74,7 +74,13 @@ export default function Home() {
     })
   }, [])
 
-  const handleRadiusChange = useCallback((r: number) => setSearchRadius(r), [])
+  const [committedRadius, setCommittedRadius] = useState(DEFAULT_SEARCH_RADIUS)
+  const radiusDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleRadiusChange = useCallback((r: number) => {
+    setSearchRadius(r)
+    if (radiusDebounceRef.current) clearTimeout(radiusDebounceRef.current)
+    radiusDebounceRef.current = setTimeout(() => setCommittedRadius(r), 450)
+  }, [])
 
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -116,10 +122,10 @@ export default function Home() {
   const fetchVehiclesForType = useCallback(
     async (filterValue: string, currentLocation: [number, number], signal: AbortSignal): Promise<MobilityVehicle[]> => {
       const geometry = `${currentLocation[1]},${currentLocation[0]}`
-      const data = await fetchMobilityVehicles(geometry, searchRadius.toString(), filterValue, signal)
+      const data = await fetchMobilityVehicles(geometry, committedRadius.toString(), filterValue, signal)
       return data.map(convertEsriJsonToMobilityVehicle)
     },
-    [searchRadius],
+    [committedRadius],
   )
 
   const fetchSpatialVehicles = useCallback(async () => {
@@ -243,8 +249,6 @@ export default function Home() {
             onSetCurrentLocation={handleSetCurrentLocation}
             defaultLocations={defaultLocations}
             locationName={locationName}
-            vehicleCount={vehicles.length}
-            lastUpdated={lastUpdated}
             activeTypes={activeTypes}
             onTypeToggle={handleTypeToggle}
             searchRadius={searchRadius}
