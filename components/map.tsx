@@ -68,7 +68,10 @@ function buildPopupHtml(vehicle: MobilityVehicle): string {
   const info = getProviderInfo(provider.name)
   const pricing = info.pricing
   const color = info.color
-  const appLink = provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.store_uri?.[0]
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent)
+  const appLink = isIos
+    ? (provider.apps?.ios?.discovery_uri || provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.discovery_uri || provider.apps?.android?.store_uri?.[0])
+    : (provider.apps?.android?.discovery_uri || provider.apps?.android?.store_uri?.[0] || provider.apps?.ios?.discovery_uri || provider.apps?.ios?.store_uri?.[0])
 
   const statusBadge = available
     ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#ecfdf5;color:#059669;">Verfügbar</span>`
@@ -99,7 +102,7 @@ function buildPopupHtml(vehicle: MobilityVehicle): string {
     buttonHtml = `
       <a href="${appLink}" target="_blank" rel="noopener noreferrer"
          style="display:block;text-align:center;padding:10px;border-radius:12px;color:white;font-size:12px;font-weight:600;text-decoration:none;margin-top:10px;background:${color};">
-        App öffnen
+        Jetzt mieten
       </a>`
   }
 

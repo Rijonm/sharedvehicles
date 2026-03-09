@@ -17,7 +17,10 @@ export default function VehicleDetails({ vehicle, onClose }: VehicleDetailsProps
   const info = getProviderInfo(provider.name)
   const pricing = info.pricing
   const color = info.color
-  const appLink = provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.store_uri?.[0]
+  const isIos = typeof window !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent)
+  const appLink = isIos
+    ? (provider.apps?.ios?.discovery_uri || provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.discovery_uri || provider.apps?.android?.store_uri?.[0])
+    : (provider.apps?.android?.discovery_uri || provider.apps?.android?.store_uri?.[0] || provider.apps?.ios?.discovery_uri || provider.apps?.ios?.store_uri?.[0])
 
   return (
     <div className="animate-slide-up">
@@ -136,7 +139,7 @@ export default function VehicleDetails({ vehicle, onClose }: VehicleDetailsProps
               className="flex items-center justify-center gap-2 w-full mt-4 py-3 rounded-2xl text-white text-sm font-semibold transition-apple hover:opacity-90 active:scale-[0.98]"
               style={{ backgroundColor: color }}
             >
-              In der App öffnen
+              Jetzt mieten
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
