@@ -17,10 +17,10 @@ import { t } from "@/lib/i18n"
 const LeafletMap = dynamic(() => import("@/components/map"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full items-center justify-center bg-muted/30">
-      <div className="flex flex-col items-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
-        <span className="text-sm text-muted-foreground">Karte wird geladen...</span>
+    <div className="flex h-full items-center justify-center bg-muted/20">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin" />
+        <span className="text-sm font-medium text-muted-foreground/60">Karte wird geladen...</span>
       </div>
     </div>
   ),
@@ -225,10 +225,10 @@ export default function Home() {
 
       {/* Loading Overlay */}
       {loading && (
-        <div className="absolute inset-0 z-[500] flex items-center justify-center bg-background/40 backdrop-blur-sm animate-fade-in">
-          <div className="glass rounded-2xl px-6 py-4 shadow-lg flex items-center gap-3">
+        <div className="absolute inset-0 z-[500] flex items-center justify-center loading-overlay backdrop-blur-sm animate-fade-in">
+          <div className="glass rounded-2xl px-7 py-5 shadow-xl flex items-center gap-3.5 animate-fade-in-scale">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <span className="text-sm font-medium">{t(locale, "loading")}</span>
+            <span className="text-sm font-semibold tracking-[-0.01em]">{t(locale, "loading")}</span>
           </div>
         </div>
       )}
@@ -256,19 +256,19 @@ export default function Home() {
 
       {/* Status Pill */}
       {locationName && !loading && vehicles.length > 0 && (
-        <div className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[500] animate-fade-in">
-          <div className="glass rounded-full px-4 py-2 shadow-md flex items-center gap-2 text-sm">
-            <span className="font-medium">{vehicles.length}</span>
-            <span className="text-muted-foreground">{t(locale, "vehiclesFound")}</span>
-            <span className="text-muted-foreground/50">·</span>
-            <span className="text-muted-foreground">{searchRadius}m</span>
+        <div className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[500] animate-fade-in-scale">
+          <div className="glass rounded-full pl-1.5 pr-4 py-1.5 shadow-lg flex items-center gap-2.5 text-sm">
+            <span className="status-count">{vehicles.length}</span>
+            <span className="text-muted-foreground font-medium">{t(locale, "vehiclesFound")}</span>
+            <span className="text-muted-foreground/30 font-light">|</span>
+            <span className="text-muted-foreground/70 tabular-nums font-medium">{searchRadius}m</span>
             {lastUpdated && (
               <button
                 onClick={refreshData}
-                className="ml-1 p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-apple"
+                className="ml-0.5 p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-apple active:scale-90"
                 aria-label={t(locale, "refresh")}
               >
-                <RotateCw className="h-3.5 w-3.5 text-muted-foreground" />
+                <RotateCw className="h-3.5 w-3.5 text-muted-foreground/60" />
               </button>
             )}
           </div>
@@ -279,7 +279,7 @@ export default function Home() {
       <div className="absolute bottom-6 right-4 z-[600] safe-area-bottom">
         <button
           onClick={handleSetCurrentLocation}
-          className="glass w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:bg-white/90 dark:hover:bg-black/60 transition-apple active:scale-95"
+          className="glass w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:bg-white/90 dark:hover:bg-black/60 transition-apple active:scale-90 hover:shadow-xl"
           aria-label={t(locale, "myLocation")}
         >
           <Navigation className="h-5 w-5 text-primary" />

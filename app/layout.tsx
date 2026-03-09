@@ -1,19 +1,20 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Inter } from "next/font/google"
+import { DM_Sans } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 
-const inter = Inter({
+const dmSans = DM_Sans({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-inter",
+  variable: "--font-dm-sans",
+  weight: ["400", "500", "600", "700"],
 })
 
 export const metadata: Metadata = {
   title: "MyRideRadar",
-  description: "Alle Sharing-Angebote auf einen Blick. Finde E-Scooter, E-Bikes und Autos in deiner Nähe.",
+  description: "Alle Sharing-Angebote auf einen Blick. Finde E-Scooter, E-Bikes und Autos in deiner N\u00e4he.",
   manifest: "/manifest.json",
   icons: {
     icon: "/logo.png",
@@ -46,7 +47,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans`}>
+      <body className={`${dmSans.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
           <Toaster />
