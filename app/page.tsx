@@ -52,8 +52,21 @@ export default function Home() {
   const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null)
   const [locationName, setLocationName] = useState<string>("")
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["E-Scooter", "E-Bike", "Car"]))
 
   const { toast } = useToast()
+
+  const handleTypeToggle = useCallback((type: string) => {
+    setActiveTypes((prev) => {
+      const next = new Set(prev)
+      if (next.has(type)) {
+        if (next.size > 1) next.delete(type)
+      } else {
+        next.add(type)
+      }
+      return next
+    })
+  }, [])
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const handleSetCurrentLocation = useCallback(() => {
@@ -114,8 +127,14 @@ export default function Home() {
     setSelectedVehicle(null)
 
     try {
+      const activeFilters = VEHICLE_TYPE_API_FILTERS.filter((f) => {
+        if (f.includes("E-Scooter")) return activeTypes.has("E-Scooter")
+        if (f.includes("E-Bike")) return activeTypes.has("E-Bike")
+        if (f.includes("Car")) return activeTypes.has("Car")
+        return true
+      })
       const results = await Promise.all(
-        VEHICLE_TYPE_API_FILTERS.map((filter) => fetchVehiclesForType(filter, location, controller.signal)),
+        activeFilters.map((filter) => fetchVehiclesForType(filter, location, controller.signal)),
       )
 
       if (controller.signal.aborted) return
@@ -147,7 +166,7 @@ export default function Home() {
         setLoading(false)
       }
     }
-  }, [location, fetchVehiclesForType, toast])
+  }, [location, fetchVehiclesForType, toast, activeTypes])
 
   useEffect(() => {
     if (location) {
@@ -211,6 +230,8 @@ export default function Home() {
             locationName={locationName}
             vehicleCount={vehicles.length}
             lastUpdated={lastUpdated}
+            activeTypes={activeTypes}
+            onTypeToggle={handleTypeToggle}
           />
         </div>
       </div>

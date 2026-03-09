@@ -11,6 +11,8 @@ interface MobilityFiltersProps {
   locationName: string
   vehicleCount: number
   lastUpdated: Date | null
+  activeTypes: Set<string>
+  onTypeToggle: (type: string) => void
 }
 
 interface Suggestion {
@@ -29,6 +31,8 @@ export default function MobilityFilters({
   onSetCurrentLocation,
   defaultLocations,
   locationName,
+  activeTypes,
+  onTypeToggle,
 }: MobilityFiltersProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -162,6 +166,33 @@ export default function MobilityFilters({
                 <p className="text-xs text-muted-foreground">GPS-Position verwenden</p>
               </div>
             </button>
+
+            {/* Vehicle Type Filters */}
+            <div className="px-4 pt-3 pb-2 border-t border-black/5 dark:border-white/5">
+              <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-2">
+                Fahrzeugtyp
+              </p>
+              <div className="flex gap-2">
+                {[
+                  { key: "E-Scooter", label: "Scooter", icon: "🛴" },
+                  { key: "E-Bike", label: "Bike", icon: "🚲" },
+                  { key: "Car", label: "Auto", icon: "🚗" },
+                ].map(({ key, label, icon }) => (
+                  <button
+                    key={key}
+                    onClick={() => onTypeToggle(key)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium transition-apple ${
+                      activeTypes.has(key)
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "bg-secondary/80 text-muted-foreground"
+                    }`}
+                  >
+                    <span>{icon}</span>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Quick Locations */}
             <div className="px-4 pt-2 pb-3">
