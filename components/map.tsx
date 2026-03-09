@@ -375,6 +375,8 @@ const LeafletMapComponent: React.FC<MapProps> = ({
         })
         .on("click", () => onVehicleSelect(vehicle))
 
+      ;(marker as L.Marker & { _provider: string })._provider = provider.name
+
       layer.addLayer(marker)
     })
   }, [vehicles, onVehicleSelect, locale])
