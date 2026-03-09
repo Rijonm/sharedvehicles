@@ -67,6 +67,19 @@ function zoomForRadius(r: number): number {
   return 13
 }
 
+const TIGHT_ZONE_RADIUS_M = 200
+
+/** Euclidean distance in metres between Leaflet center [lat,lng] and a vehicle's GeoJSON coordinates [lng,lat]. */
+function distanceToVehicle(center: [number, number], vehicle: MobilityVehicle): number {
+  const cLat = center[0]
+  const cLng = center[1]
+  const vLat = vehicle.geometry.coordinates[1]  // GeoJSON is [lng, lat]
+  const vLng = vehicle.geometry.coordinates[0]
+  const dLat = (vLat - cLat) * 111320
+  const dLng = (vLng - cLng) * 111320 * Math.cos((cLat * Math.PI) / 180)
+  return Math.sqrt(dLat * dLat + dLng * dLng)
+}
+
 function buildPopupHtml(vehicle: MobilityVehicle, locale: Locale): string {
   const { properties } = vehicle
   const { provider, station, vehicle_type, available } = properties
