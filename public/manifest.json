@@ -1,0 +1,37 @@
+{
+  "name": "MyRideRadar",
+  "short_name": "MyRideRadar",
+  "description": "Alle Sharing-Angebote auf einen Blick. Finde E-Scooter, E-Bikes und Autos in deiner Nähe.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8f8f8",
+  "theme_color": "#f8f8f8",
+  "categories": ["transportation", "navigation", "travel"],
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

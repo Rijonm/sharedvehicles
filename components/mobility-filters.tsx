@@ -1,16 +1,16 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { MapPin, Search, LocateFixed } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/use-toast"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { MapPin, Search, Navigation, ChevronDown } from "lucide-react"
+import { searchLocationSuggestions, searchLocation } from "@/lib/api"
 
 interface MobilityFiltersProps {
   onLocationSearch: (location: [number, number], name: string) => void
   onSetCurrentLocation: () => void
   defaultLocations: { name: string; coords: [number, number] }[]
+  locationName: string
+  vehicleCount: number
+  lastUpdated: Date | null
 }
 
 interface Suggestion {
@@ -22,20 +22,22 @@ interface Suggestion {
   }
 }
 
+const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "")
+
 export default function MobilityFilters({
   onLocationSearch,
   onSetCurrentLocation,
   defaultLocations,
+  locationName,
 }: MobilityFiltersProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [isSuggestionsVisible, setIsSuggestionsVisible] = useState(false)
-  const { toast } = useToast()
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
   const searchContainerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "")
-
-  // Debounced fetch for autocomplete suggestions from Swisstopo API
   useEffect(() => {
     if (searchQuery.length < 3) {
       setSuggestions([])
@@ -44,168 +46,168 @@ export default function MobilityFilters({
     }
 
     const handler = setTimeout(async () => {
-      try {
-        // Using Swisstopo API for stable Swiss geocoding
-        const response = await fetch(
-          `https://api3.geo.admin.ch/rest/services/api/SearchServer?type=locations&origins=address,gg25&limit=5&searchText=${encodeURIComponent(
-            searchQuery,
-          )}`,
-        )
-        const data = await response.json()
-        if (data.results && data.results.length > 0) {
-          setSuggestions(data.results)
-          setIsSuggestionsVisible(true)
-        } else {
-          setSuggestions([])
-        }
-      } catch (error) {
-        console.error("Error fetching suggestions:", error)
+      const results = await searchLocationSuggestions(searchQuery)
+      if (results.length > 0) {
+        setSuggestions(results)
+        setIsSuggestionsVisible(true)
+      } else {
         setSuggestions([])
       }
-    }, 300) // 300ms delay
+    }, 300)
 
-    return () => {
-      clearTimeout(handler)
-    }
+    return () => clearTimeout(handler)
   }, [searchQuery])
 
-  // Handle clicks outside to close suggestions
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setIsSuggestionsVisible(false)
+        setIsExpanded(false)
+        setIsFocused(false)
       }
     }
     document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [searchContainerRef])
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   const handleSearch = async (query: string) => {
-    if (!query.trim()) {
-      toast({
-        title: "Bitte geben Sie einen Ort ein",
-        description: "Geben Sie eine Stadt oder Adresse ein, um zu suchen",
-        variant: "destructive",
-      })
-      return
-    }
+    if (!query.trim()) return
 
-    try {
-      const response = await fetch(
-        `https://api3.geo.admin.ch/rest/services/api/SearchServer?type=locations&origins=address,gg25&limit=1&searchText=${encodeURIComponent(
-          query,
-        )}`,
-      )
-      const data = await response.json()
-
-      if (data.results && data.results.length > 0) {
-        const { lat, lon, label } = data.results[0].attrs
-        const displayName = stripHtml(label)
-        setSearchQuery(displayName)
-        setIsSuggestionsVisible(false)
-        onLocationSearch([lat, lon], displayName)
-        toast({
-          title: "Standort aktualisiert",
-          description: `Zeige Ergebnisse in der Nähe von ${displayName}`,
-        })
-      } else {
-        toast({
-          title: "Standort nicht gefunden",
-          description: "Versuchen Sie einen anderen Suchbegriff",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error searching location:", error)
-      toast({
-        title: "Fehler bei der Standortsuche",
-        description: "Bitte versuchen Sie es später erneut",
-        variant: "destructive",
-      })
+    const result = await searchLocation(query)
+    if (result) {
+      setSearchQuery("")
+      setIsSuggestionsVisible(false)
+      setIsExpanded(false)
+      setIsFocused(false)
+      onLocationSearch([result.lat, result.lon], result.label)
     }
   }
 
   const handleSuggestionClick = (suggestion: Suggestion) => {
     const { lat, lon, label } = suggestion.attrs
     const displayName = stripHtml(label)
-    setSearchQuery(displayName)
+    setSearchQuery("")
     setIsSuggestionsVisible(false)
+    setIsExpanded(false)
+    setIsFocused(false)
     onLocationSearch([lat, lon], displayName)
-    toast({
-      title: "Standort aktualisiert",
-      description: `Zeige Ergebnisse in der Nähe von ${displayName}`,
-    })
+  }
+
+  const handleCurrentLocation = () => {
+    setIsExpanded(false)
+    setIsFocused(false)
+    onSetCurrentLocation()
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold">Standort</h2>
-        <div className="relative" ref={searchContainerRef}>
-          <div className="flex space-x-2">
-            <Input
-              placeholder="Stadt oder Adresse suchen"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => searchQuery.length > 2 && setIsSuggestionsVisible(true)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch(searchQuery)}
-              autoComplete="off"
-            />
-            <Button onClick={() => handleSearch(searchQuery)} size="icon" aria-label="Suchen">
-              <Search className="h-4 w-4" />
-            </Button>
-          </div>
-          {isSuggestionsVisible && suggestions.length > 0 && (
-            <Card className="absolute z-10 w-full mt-1 shadow-lg">
-              <CardContent className="p-1">
-                <ul className="space-y-1">
-                  {suggestions.map((suggestion) => (
-                    <li key={suggestion.id}>
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-start text-left h-auto py-2 px-2"
-                        onClick={() => handleSuggestionClick(suggestion)}
-                      >
-                        {stripHtml(suggestion.attrs.label)}
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+    <div ref={searchContainerRef} className="relative">
+      {/* Main Search Bar */}
+      <div
+        className={`glass rounded-2xl shadow-lg transition-apple overflow-hidden ${
+          isFocused || isExpanded ? "shadow-xl ring-1 ring-black/5 dark:ring-white/10" : ""
+        }`}
+      >
+        {/* Search Input Row */}
+        <div className="flex items-center gap-2 px-4 py-3">
+          <Search className="h-4.5 w-4.5 text-muted-foreground/60 shrink-0" />
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder={locationName || "Standort suchen..."}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => {
+              setIsFocused(true)
+              setIsExpanded(true)
+              if (searchQuery.length > 2) setIsSuggestionsVisible(true)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSearch(searchQuery)
+              if (e.key === "Escape") {
+                setIsFocused(false)
+                setIsExpanded(false)
+                inputRef.current?.blur()
+              }
+            }}
+            className="flex-1 bg-transparent text-sm font-medium outline-none placeholder:text-muted-foreground/50"
+            autoComplete="off"
+          />
+          {!isFocused && !isExpanded && (
+            <button
+              onClick={() => {
+                setIsExpanded(true)
+                inputRef.current?.focus()
+              }}
+              className="p-1.5 -mr-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-apple"
+              aria-label="Erweitern"
+            >
+              <ChevronDown className="h-4 w-4 text-muted-foreground/60" />
+            </button>
           )}
         </div>
 
-        <Button onClick={onSetCurrentLocation} variant="outline" className="w-full mt-2 flex items-center gap-2">
-          <LocateFixed className="h-4 w-4" />
-          Mein Standort
-        </Button>
+        {/* Expanded Panel */}
+        {isExpanded && (
+          <div className="border-t border-black/5 dark:border-white/5 animate-fade-in">
+            {/* My Location Button */}
+            <button
+              onClick={handleCurrentLocation}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-apple text-left"
+            >
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <Navigation className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Mein Standort</p>
+                <p className="text-xs text-muted-foreground">GPS-Position verwenden</p>
+              </div>
+            </button>
 
-        <Card className="mt-4">
-          <CardHeader className="py-2">
-            <CardTitle className="text-xs flex items-center gap-1">
-              <MapPin className="h-3 w-3" /> Beliebte Orte
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="py-2">
-            <div className="grid grid-cols-2 gap-2">
-              {defaultLocations.map((location) => (
-                <Button
-                  key={location.name}
-                  variant="outline"
-                  size="sm" // Behalte sm für die allgemeine Struktur, aber überschreibe Textgröße und Padding
-                  className="w-full justify-start text-xs px-2 py-1 h-auto" // Kleinere Schrift und Padding
-                  onClick={() => onLocationSearch(location.coords, location.name)}
-                >
-                  {location.name}
-                </Button>
-              ))}
+            {/* Quick Locations */}
+            <div className="px-4 pt-2 pb-3">
+              <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-2">
+                Beliebte Orte
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {defaultLocations.map((loc) => (
+                  <button
+                    key={loc.name}
+                    onClick={() => {
+                      setIsExpanded(false)
+                      setIsFocused(false)
+                      onLocationSearch(loc.coords, loc.name)
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/80 hover:bg-secondary text-xs font-medium transition-apple"
+                  >
+                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                    {loc.name}
+                  </button>
+                ))}
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        )}
       </div>
+
+      {/* Autocomplete Suggestions Dropdown */}
+      {isSuggestionsVisible && suggestions.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-2 glass rounded-2xl shadow-xl overflow-hidden z-50 animate-fade-in">
+          {suggestions.map((suggestion, index) => (
+            <button
+              key={suggestion.id}
+              onClick={() => handleSuggestionClick(suggestion)}
+              className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-black/[0.03] dark:hover:bg-white/[0.03] transition-apple text-left ${
+                index > 0 ? "border-t border-black/5 dark:border-white/5" : ""
+              }`}
+            >
+              <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium truncate">{stripHtml(suggestion.attrs.label)}</p>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

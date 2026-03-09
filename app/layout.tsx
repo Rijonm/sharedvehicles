@@ -1,25 +1,42 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+})
 
 export const metadata: Metadata = {
-  title: "My Ride Radar", // Angepasster Titel
-  description: "Gibt dir eine Übersicht über alle Sharing Angebote in der Schweiz und deiner Umgebung.", // Angepasste Beschreibung
-  manifest: "/manifest.ts", // Verweis auf die Manifest-Datei
+  title: "MyRideRadar",
+  description: "Alle Sharing-Angebote auf einen Blick. Finde E-Scooter, E-Bikes und Autos in deiner Nähe.",
+  manifest: "/manifest.json",
   icons: {
-    icon: "/logo.png", // Standard Favicon
-    shortcut: "/logo.png", // Für ältere Browser
-    apple: "/logo.png", // Für Apple Touch Icon
-    // Du könntest hier auch spezifische Größen für Apple-Icons definieren,
-    // aber Next.js kann oft das einzelne Icon gut skalieren.
-    // z.B. apple: [ { url: '/apple-icon-180x180.png', sizes: '180x180', type: 'image/png' } ]
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
   },
-    generator: 'v0.dev'
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "MyRideRadar",
+  },
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f8f8f8" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d0d0d" },
+  ],
 }
 
 export default function RootLayout({
@@ -28,8 +45,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="de" suppressHydrationWarning>
+      <body className={`${inter.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
           <Toaster />
