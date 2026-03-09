@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // output: "export" — enable for production/Capacitor build
-  // trailingSlash: true,
+  output: "export",
+  trailingSlash: true,
   images: {
     unoptimized: true,
   },
