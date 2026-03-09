@@ -73,6 +73,10 @@ function buildPopupHtml(vehicle: MobilityVehicle): string {
     ? (provider.apps?.ios?.discovery_uri || provider.apps?.ios?.store_uri?.[0] || provider.apps?.android?.discovery_uri || provider.apps?.android?.store_uri?.[0])
     : (provider.apps?.android?.discovery_uri || provider.apps?.android?.store_uri?.[0] || provider.apps?.ios?.discovery_uri || provider.apps?.ios?.store_uri?.[0])
 
+  const swisspassHtml = info.swisspass
+    ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#fff1f2;color:#e11d48;">SwissPass</span>`
+    : ""
+
   const statusBadge = available
     ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#ecfdf5;color:#059669;">Verfügbar</span>`
     : `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;background:#fef2f2;color:#ef4444;">Belegt</span>`
@@ -118,6 +122,7 @@ function buildPopupHtml(vehicle: MobilityVehicle): string {
           <div>
             <h3 style="font-size:14px;font-weight:600;margin:0;line-height:1.3;">${provider.name}</h3>
             <p style="font-size:11px;color:#6b7280;margin:2px 0 0;">${vehicle_type}</p>
+            ${swisspassHtml}
           </div>
         </div>
         ${statusBadge}

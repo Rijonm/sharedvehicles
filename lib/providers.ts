@@ -3,6 +3,7 @@ export interface ProviderInfo {
   shortName: string
   logo: string
   pricing?: { unlock: string; minute: string }
+  swisspass?: boolean
 }
 
 export const providerConfig: Record<string, ProviderInfo> = {
@@ -40,6 +41,7 @@ export const providerConfig: Record<string, ProviderInfo> = {
     color: "#9C1B6E",
     shortName: "PB",
     logo: "/providers/publibike.png",
+    swisspass: true,
   },
   nextbike: {
     color: "#1641AC",
@@ -55,6 +57,7 @@ export const providerConfig: Record<string, ProviderInfo> = {
     color: "#6B2D5B",
     shortName: "VS",
     logo: "/providers/velospot.png",
+    swisspass: true,
   },
   Mobility: {
     color: "#E53935",

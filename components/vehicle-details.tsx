@@ -51,6 +51,11 @@ export default function VehicleDetails({ vehicle, onClose }: VehicleDetailsProps
                 <h3 className="font-semibold text-base leading-tight">{provider.name}</h3>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-xs text-muted-foreground">{vehicle_type}</span>
+                  {info.swisspass && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                      SwissPass
+                    </span>
+                  )}
                   <span
                     className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                       available
