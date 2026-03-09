@@ -47,6 +47,7 @@ export const translations = {
     swisspass: "SwissPass",
     selectedPlace: "Gewählter Ort",
     expand: "Erweitern",
+    brandFilterEmpty: "Kein Anbieter passt zum Filter",
   },
   fr: {
     searchPlaceholder: "Rechercher un lieu...",
@@ -94,6 +95,7 @@ export const translations = {
     swisspass: "SwissPass",
     selectedPlace: "Lieu sélectionné",
     expand: "Agrandir",
+    brandFilterEmpty: "Aucun prestataire ne correspond au filtre",
   },
   it: {
     searchPlaceholder: "Cerca un luogo...",
@@ -141,6 +143,7 @@ export const translations = {
     swisspass: "SwissPass",
     selectedPlace: "Luogo selezionato",
     expand: "Espandi",
+    brandFilterEmpty: "Nessun fornitore corrisponde al filtro",
   },
 } as const
 

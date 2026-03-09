@@ -15,6 +15,8 @@ import { useLocale } from "@/hooks/useLocale"
 import { t } from "@/lib/i18n"
 import { getProviderInfo } from "@/lib/providers"
 
+const PwaInstallPrompt = dynamic(() => import("@/components/pwa-install-prompt"), { ssr: false })
+
 const LeafletMap = dynamic(() => import("@/components/map"), {
   ssr: false,
   loading: () => (
@@ -325,6 +327,15 @@ export default function Home() {
         </div>
       )}
 
+      {/* Brand filter empty state */}
+      {locationName && !loading && activeBrands.size > 0 && vehicles.length > 0 && displayVehicles.length === 0 && (
+        <div className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[500] animate-fade-in-scale">
+          <div className="glass rounded-full px-4 py-1.5 shadow-lg text-sm text-muted-foreground font-medium">
+            {t(locale, "brandFilterEmpty")}
+          </div>
+        </div>
+      )}
+
       {/* GPS Floating Button - bottom right */}
       <div className="absolute bottom-6 right-4 z-[600] safe-area-bottom">
         <button
@@ -335,6 +346,9 @@ export default function Home() {
           <Navigation className="h-5 w-5 text-primary" />
         </button>
       </div>
+
+      {/* PWA Install Prompt */}
+      <PwaInstallPrompt hasResults={vehicles.length > 0} />
 
       {/* Vehicle Details Bottom Sheet */}
       {selectedVehicle && (
