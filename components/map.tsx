@@ -339,15 +339,18 @@ const LeafletMapComponent: React.FC<MapProps> = ({
       tapMarkerRef.current = null
     }
 
-    if (vehicles.length > 0) {
-      const bounds = L.latLngBounds([leafletCenter])
-      vehicles.forEach((v) => {
-        bounds.extend([v.geometry.coordinates[1], v.geometry.coordinates[0]])
-      })
-      if (bounds.isValid() && bounds.getSouthWest().distanceTo(bounds.getNorthEast()) > 10) {
-        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 18 })
+    if (vehicles.length > 0 && userLocation !== null) {
+      // Smart tight zoom: snap to street level if any vehicle is within 200 m,
+      // otherwise show all results capped at zoom 16 so the user has spatial context.
+      const anyClose = vehicles.some((v) => distanceToVehicle(center, v) <= TIGHT_ZONE_RADIUS_M)
+      if (anyClose) {
+        map.setView(leafletCenter, 17)
       } else {
-        map.setView(leafletCenter, zoomForRadius(searchRadius))
+        const bounds = L.latLngBounds([leafletCenter])
+        vehicles.forEach((v) => {
+          bounds.extend([v.geometry.coordinates[1], v.geometry.coordinates[0]])
+        })
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 })
       }
     } else {
       map.setView(leafletCenter, zoomForRadius(searchRadius))
