@@ -11,14 +11,16 @@ import dynamic from "next/dynamic"
 import type { MobilityVehicle } from "@/types/mobility"
 import { convertEsriJsonToMobilityVehicle } from "@/utils/converters"
 import { fetchMobilityVehicles } from "@/lib/api"
+import { useLocale } from "@/hooks/useLocale"
+import { t } from "@/lib/i18n"
 
 const LeafletMap = dynamic(() => import("@/components/map"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full items-center justify-center bg-muted/30">
-      <div className="flex flex-col items-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
-        <span className="text-sm text-muted-foreground">Karte wird geladen...</span>
+    <div className="flex h-full items-center justify-center bg-muted/20">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 rounded-full border-[3px] border-primary/20 border-t-primary animate-spin" />
+        <span className="text-sm font-medium text-muted-foreground/60">···</span>
       </div>
     </div>
   ),
@@ -33,7 +35,7 @@ const defaultLocations = [
   { name: "St. Gallen", coords: [47.4245, 9.3767] as [number, number] },
 ]
 
-const FIXED_SEARCH_RADIUS = 400
+const DEFAULT_SEARCH_RADIUS = 400
 const DEFAULT_MAP_CENTER: [number, number] = [46.8182, 8.2275]
 const DEFAULT_MAP_ZOOM_OVERVIEW = 8
 const ACTIVE_SEARCH_INITIAL_ZOOM = 16
@@ -52,8 +54,34 @@ export default function Home() {
   const [userLocationMarker, setUserLocationMarker] = useState<[number, number] | null>(null)
   const [locationName, setLocationName] = useState<string>("")
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(["E-Scooter", "E-Bike", "Car"]))
+  const [searchRadius, setSearchRadius] = useState(DEFAULT_SEARCH_RADIUS)
 
+  const { locale, setLocale } = useLocale()
+  const localeRef = useRef(locale)
+  useEffect(() => { localeRef.current = locale }, [locale])
   const { toast } = useToast()
+
+  const handleTypeToggle = useCallback((type: string) => {
+    setActiveTypes((prev) => {
+      const next = new Set(prev)
+      if (next.has(type)) {
+        if (next.size > 1) next.delete(type)
+      } else {
+        next.add(type)
+      }
+      return next
+    })
+  }, [])
+
+  const [committedRadius, setCommittedRadius] = useState(DEFAULT_SEARCH_RADIUS)
+  const radiusDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleRadiusChange = useCallback((r: number) => {
+    setSearchRadius(r)
+    if (radiusDebounceRef.current) clearTimeout(radiusDebounceRef.current)
+    radiusDebounceRef.current = setTimeout(() => setCommittedRadius(r), 450)
+  }, [])
+
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const handleSetCurrentLocation = useCallback(() => {
@@ -64,22 +92,22 @@ export default function Home() {
           const currentCoords: [number, number] = [position.coords.latitude, position.coords.longitude]
           setLocation(currentCoords)
           setUserLocationMarker(currentCoords)
-          setLocationName("Mein Standort")
+          setLocationName(t(localeRef.current, "myLocation"))
         },
         (error) => {
           setLoading(false)
-          let description = "Standort konnte nicht ermittelt werden."
+          let description = t(localeRef.current, "locationErrorDesc")
           if (error.code === 1) {
-            description = "Bitte erlaube den Zugriff auf deinen Standort."
+            description = t(localeRef.current, "locationDenied")
           }
-          toast({ title: "Standortfehler", description, variant: "destructive" })
+          toast({ title: t(localeRef.current, "locationError"), description, variant: "destructive" })
         },
         { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 },
       )
     } else {
       toast({
-        title: "Nicht verfügbar",
-        description: "Standortdienste werden nicht unterstützt.",
+        title: t(localeRef.current, "locationUnavailable"),
+        description: t(localeRef.current, "locationUnavailableDesc"),
         variant: "destructive",
       })
     }
@@ -87,17 +115,17 @@ export default function Home() {
 
   const handleMapTapLocation = useCallback((coords: [number, number]) => {
     setLocation(coords)
-    setLocationName("Gewählter Ort")
+    setLocationName(t(localeRef.current, "selectedPlace"))
     setUserLocationMarker(null)
   }, [])
 
   const fetchVehiclesForType = useCallback(
     async (filterValue: string, currentLocation: [number, number], signal: AbortSignal): Promise<MobilityVehicle[]> => {
       const geometry = `${currentLocation[1]},${currentLocation[0]}`
-      const data = await fetchMobilityVehicles(geometry, FIXED_SEARCH_RADIUS.toString(), filterValue, signal)
+      const data = await fetchMobilityVehicles(geometry, committedRadius.toString(), filterValue, signal)
       return data.map(convertEsriJsonToMobilityVehicle)
     },
-    [],
+    [committedRadius],
   )
 
   const fetchSpatialVehicles = useCallback(async () => {
@@ -114,8 +142,14 @@ export default function Home() {
     setSelectedVehicle(null)
 
     try {
+      const activeFilters = VEHICLE_TYPE_API_FILTERS.filter((f) => {
+        if (f.includes("E-Scooter")) return activeTypes.has("E-Scooter")
+        if (f.includes("E-Bike")) return activeTypes.has("E-Bike")
+        if (f.includes("Car")) return activeTypes.has("Car")
+        return true
+      })
       const results = await Promise.all(
-        VEHICLE_TYPE_API_FILTERS.map((filter) => fetchVehiclesForType(filter, location, controller.signal)),
+        activeFilters.map((filter) => fetchVehiclesForType(filter, location, controller.signal)),
       )
 
       if (controller.signal.aborted) return
@@ -124,22 +158,27 @@ export default function Home() {
       results.flat().forEach((v) => {
         if (!uniqueMap.has(v.id)) uniqueMap.set(v.id, v)
       })
-      const finalVehicles = Array.from(uniqueMap.values())
+      const finalVehicles = Array.from(uniqueMap.values()).filter((v) => {
+        if (v.properties.station) {
+          return (v.properties.station.status.num_vehicle_available ?? 0) > 0
+        }
+        return true
+      })
 
       setVehicles(finalVehicles)
       setLastUpdated(new Date())
 
       if (finalVehicles.length === 0) {
         toast({
-          title: "Keine Fahrzeuge",
-          description: `Keine Fahrzeuge im Umkreis von ${FIXED_SEARCH_RADIUS}m gefunden.`,
+          title: t(localeRef.current, "noVehicles"),
+          description: t(localeRef.current, "noVehiclesDesc", { radius: searchRadius.toString() }),
         })
       }
     } catch (error) {
       if (controller.signal.aborted) return
       toast({
-        title: "Fehler",
-        description: "Fahrzeuge konnten nicht geladen werden.",
+        title: t(localeRef.current, "fetchError"),
+        description: t(localeRef.current, "fetchErrorDesc"),
         variant: "destructive",
       })
     } finally {
@@ -147,7 +186,7 @@ export default function Home() {
         setLoading(false)
       }
     }
-  }, [location, fetchVehiclesForType, toast])
+  }, [location, fetchVehiclesForType, toast, activeTypes])
 
   useEffect(() => {
     if (location) {
@@ -185,18 +224,19 @@ export default function Home() {
           vehicles={vehicles}
           onVehicleSelect={setSelectedVehicle}
           onMapTapLocation={handleMapTapLocation}
-          searchRadius={location ? FIXED_SEARCH_RADIUS : 50000}
+          searchRadius={location ? searchRadius : 50000}
           userLocation={userLocationMarker}
           showRadius={!!location}
+          locale={locale}
         />
       </div>
 
       {/* Loading Overlay */}
       {loading && (
-        <div className="absolute inset-0 z-[500] flex items-center justify-center bg-background/40 backdrop-blur-sm animate-fade-in">
-          <div className="glass rounded-2xl px-6 py-4 shadow-lg flex items-center gap-3">
+        <div className="absolute inset-0 z-[500] flex items-center justify-center loading-overlay backdrop-blur-sm animate-fade-in">
+          <div className="glass rounded-2xl px-7 py-5 shadow-xl flex items-center gap-3.5 animate-fade-in-scale">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <span className="text-sm font-medium">Fahrzeuge werden gesucht...</span>
+            <span className="text-sm font-semibold tracking-[-0.01em]">{t(locale, "loading")}</span>
           </div>
         </div>
       )}
@@ -209,27 +249,32 @@ export default function Home() {
             onSetCurrentLocation={handleSetCurrentLocation}
             defaultLocations={defaultLocations}
             locationName={locationName}
-            vehicleCount={vehicles.length}
-            lastUpdated={lastUpdated}
+            activeTypes={activeTypes}
+            onTypeToggle={handleTypeToggle}
+            searchRadius={searchRadius}
+            onRadiusChange={handleRadiusChange}
+            currentCoords={location}
+            locale={locale}
+            onLocaleChange={setLocale}
           />
         </div>
       </div>
 
       {/* Status Pill */}
       {locationName && !loading && vehicles.length > 0 && (
-        <div className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[500] animate-fade-in">
-          <div className="glass rounded-full px-4 py-2 shadow-md flex items-center gap-2 text-sm">
-            <span className="font-medium">{vehicles.length}</span>
-            <span className="text-muted-foreground">Fahrzeuge</span>
-            <span className="text-muted-foreground/50">·</span>
-            <span className="text-muted-foreground">{FIXED_SEARCH_RADIUS}m</span>
+        <div className="absolute top-[120px] left-1/2 -translate-x-1/2 z-[500] animate-fade-in-scale">
+          <div className="glass rounded-full pl-1.5 pr-4 py-1.5 shadow-lg flex items-center gap-2.5 text-sm">
+            <span className="status-count">{vehicles.length}</span>
+            <span className="text-muted-foreground font-medium">{t(locale, "vehiclesFound")}</span>
+            <span className="text-muted-foreground/30 font-light">|</span>
+            <span className="text-muted-foreground/70 tabular-nums font-medium">{searchRadius}m</span>
             {lastUpdated && (
               <button
                 onClick={refreshData}
-                className="ml-1 p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-apple"
-                aria-label="Aktualisieren"
+                className="ml-0.5 p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-apple active:scale-90"
+                aria-label={t(locale, "refresh")}
               >
-                <RotateCw className="h-3.5 w-3.5 text-muted-foreground" />
+                <RotateCw className="h-3.5 w-3.5 text-muted-foreground/60" />
               </button>
             )}
           </div>
@@ -240,8 +285,8 @@ export default function Home() {
       <div className="absolute bottom-6 right-4 z-[600] safe-area-bottom">
         <button
           onClick={handleSetCurrentLocation}
-          className="glass w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:bg-white/90 dark:hover:bg-black/60 transition-apple active:scale-95"
-          aria-label="Mein Standort"
+          className="glass w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:bg-white/90 dark:hover:bg-black/60 transition-apple active:scale-90 hover:shadow-xl"
+          aria-label={t(locale, "myLocation")}
         >
           <Navigation className="h-5 w-5 text-primary" />
         </button>
@@ -250,7 +295,7 @@ export default function Home() {
       {/* Vehicle Details Bottom Sheet */}
       {selectedVehicle && (
         <div className="absolute bottom-0 left-0 right-0 z-[700] safe-area-bottom">
-          <VehicleDetails vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} />
+          <VehicleDetails vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} locale={locale} />
         </div>
       )}
     </main>
