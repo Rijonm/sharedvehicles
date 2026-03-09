@@ -4,6 +4,9 @@ import type React from "react"
 import { useEffect, useRef } from "react"
 import L, { type LatLngExpression } from "leaflet"
 import "leaflet/dist/leaflet.css"
+import "leaflet.markercluster"
+import "leaflet.markercluster/dist/MarkerCluster.css"
+import "leaflet.markercluster/dist/MarkerCluster.Default.css"
 import type { MobilityVehicle } from "@/types/mobility"
 import { getProviderInfo } from "@/lib/providers"
 
@@ -146,7 +149,7 @@ const LeafletMapComponent: React.FC<MapProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
-  const markersLayerRef = useRef<L.LayerGroup | null>(null)
+  const markersLayerRef = useRef<L.MarkerClusterGroup | null>(null)
   const radiusCircleRef = useRef<L.Circle | null>(null)
   const userMarkerRef = useRef<L.CircleMarker | null>(null)
   const userPulseRef = useRef<L.CircleMarker | null>(null)
@@ -173,7 +176,21 @@ const LeafletMapComponent: React.FC<MapProps> = ({
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map)
 
-    markersLayerRef.current = L.layerGroup().addTo(map)
+    markersLayerRef.current = L.markerClusterGroup({
+      maxClusterRadius: 40,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      spiderfyOnMaxZoom: true,
+      iconCreateFunction: (cluster) => {
+        const count = cluster.getChildCount()
+        return L.divIcon({
+          html: `<div style="width:36px;height:36px;background:hsl(211,100%,50%);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2.5px solid white;box-shadow:0 2px 8px rgba(0,122,255,0.3);color:white;font-size:12px;font-weight:700;font-family:-apple-system,sans-serif;">${count}</div>`,
+          className: "custom-cluster-marker",
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+        })
+      },
+    }).addTo(map)
 
     // Tap-to-place: click on map → dismiss existing marker, or show new one
     map.on("click", (e: L.LeafletMouseEvent) => {
