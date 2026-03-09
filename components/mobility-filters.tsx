@@ -13,6 +13,9 @@ interface MobilityFiltersProps {
   locationName: string
   activeTypes: Set<string>
   onTypeToggle: (type: string) => void
+  availableBrands: { name: string; color: string; logo?: string }[]
+  activeBrands: Set<string>
+  onBrandToggle: (brand: string) => void
   searchRadius: number
   onRadiusChange: (r: number) => void
   currentCoords: [number, number] | null
@@ -46,6 +49,9 @@ export default function MobilityFilters({
   locationName,
   activeTypes,
   onTypeToggle,
+  availableBrands,
+  activeBrands,
+  onBrandToggle,
   searchRadius,
   onRadiusChange,
   currentCoords,
@@ -202,18 +208,51 @@ export default function MobilityFilters({
                   <button
                     key={key}
                     onClick={() => onTypeToggle(key)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-apple active:scale-[0.97] ${
+                    className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 rounded-xl text-xs font-semibold transition-apple active:scale-[0.97] ${
                       activeTypes.has(key)
                         ? "bg-primary text-primary-foreground filter-btn-active"
                         : "bg-secondary/80 text-muted-foreground hover:bg-secondary ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
                     }`}
                   >
-                    <span className="text-sm">{icon}</span>
+                    <span className="text-2xl leading-none">{icon}</span>
                     {label}
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* Brand Filter */}
+            {availableBrands.length > 1 && (
+              <div className="px-4 pt-3 pb-3 border-t border-black/[0.04] dark:border-white/[0.06]">
+                <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest mb-2.5">
+                  {t(locale, "brandFilter")}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {availableBrands.map(({ name, color, logo }) => {
+                    const isActive = activeBrands.has(name)
+                    return (
+                      <button
+                        key={name}
+                        onClick={() => onBrandToggle(name)}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold transition-apple active:scale-[0.97] ${
+                          isActive
+                            ? "text-white ring-2 ring-offset-1"
+                            : "bg-secondary/80 text-muted-foreground hover:bg-secondary ring-1 ring-black/[0.04] dark:ring-white/[0.06]"
+                        }`}
+                        style={isActive ? { backgroundColor: color, ringColor: color } : {}}
+                      >
+                        {logo ? (
+                          <img src={logo} alt={name} className="w-4 h-4 rounded object-cover" />
+                        ) : (
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                        )}
+                        {name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Search Radius */}
             <div className="px-4 pt-2 pb-3 border-t border-black/[0.04] dark:border-white/[0.06]">
