@@ -147,7 +147,12 @@ export default function Home() {
       results.flat().forEach((v) => {
         if (!uniqueMap.has(v.id)) uniqueMap.set(v.id, v)
       })
-      const finalVehicles = Array.from(uniqueMap.values())
+      const finalVehicles = Array.from(uniqueMap.values()).filter((v) => {
+        if (v.properties.station) {
+          return (v.properties.station.status.num_vehicle_available ?? 0) > 0
+        }
+        return true
+      })
 
       setVehicles(finalVehicles)
       setLastUpdated(new Date())
